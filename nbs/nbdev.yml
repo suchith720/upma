@@ -1,0 +1,9 @@
+project:
+  output-dir: _docs
+
+website:
+  title: "upma"
+  site-url: "https://suchith720.github.io/upma"
+  description: "Updatable Parametric Memory Augmented Encoders"
+  repo-branch: main
+  repo-url: "https://github.com/suchith720/upma"
