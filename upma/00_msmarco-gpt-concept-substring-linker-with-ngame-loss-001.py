@@ -55,7 +55,7 @@ if __name__ == '__main__':
         test_dset = block.test.dset.get_valid_dset()
         if extra_args.pct < 1.0: 
             train_dset = train_dset._getitems(get_random_idx(len(train_dset), extra_args.pct))
-
+    
     args = XCLearningArguments(
         output_dir=output_dir,
         logging_first_step=True,
