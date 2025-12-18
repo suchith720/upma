@@ -106,6 +106,7 @@ if __name__ == '__main__':
         neg2data_inject_memory=False,
         
         data_repr_pooling=False,
+        data_normalize=False,
     
         margin=0.3,
         num_negatives=10,
