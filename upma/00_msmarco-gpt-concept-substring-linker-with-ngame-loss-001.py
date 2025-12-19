@@ -18,6 +18,7 @@ os.environ['WANDB_PROJECT'] = "01_upma-msmarco-gpt-concept-substring-linker"
 def additional_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--pct', type=float, default=1.0)
+    parser.add_argument('--use_all', action="store_true")
     return parser.parse_known_args()[0]
 
 def get_random_idx(n_data:int, pct:float):
@@ -34,7 +35,12 @@ if __name__ == '__main__':
     input_args.use_sxc_sampler = True
     input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
 
-    config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-concept-substring.json"
+    if extra_args.use_all:
+        config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-all-concept-substring.json"
+    else:
+        config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-concept-substring.json"
+        assert input_args.do_test_inference, f"All concept substrings should be used in inference mode"
+
     config_key, fname = get_config_key(config_file)
 
     mname = "sentence-transformers/msmarco-distilbert-cos-v5"
@@ -49,7 +55,7 @@ if __name__ == '__main__':
                         n_slbl_samples=1, main_oversample=False)
 
     if do_inference: 
-        train_dset, test_dset = block.train.dset, block.test.dset
+        train_dset, test_dset = None if block.train is None else block.train.dset, block.test.dset
     else: 
         train_dset = block.train.dset.get_valid_dset()
         test_dset = block.test.dset.get_valid_dset()
@@ -116,7 +122,7 @@ if __name__ == '__main__':
     model = load_model(args.output_dir, model_fn, {"mname": mname, "config": config}, do_inference=do_inference, 
                        use_pretrained=input_args.use_pretrained)
 
-    metric = PrecReclMrr(test_dset.data.n_lbl, test_dset.data.data_lbl_filterer, prop=train_dset.data.data_lbl, 
+    metric = PrecReclMrr(test_dset.data.n_lbl, test_dset.data.data_lbl_filterer, prop=None if train_dset is None else train_dset.data.data_lbl, 
                          pk=10, rk=200, rep_pk=[1, 3, 5, 10], rep_rk=[10, 100, 200], mk=[5, 10, 20])
 
     learn = XCLearner(

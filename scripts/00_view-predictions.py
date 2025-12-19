@@ -67,6 +67,7 @@ def additional_args():
     parser.add_argument('--num_examples', type=int, default=20) 
     parser.add_argument('--index_type', type=str, default='random')
     parser.add_argument('--for_train', action='store_true')
+    parser.add_argument('--use_all', action='store_true')
     return parser.parse_known_args()[0]
 
 
@@ -82,7 +83,12 @@ if __name__ == '__main__':
     input_args.use_sxc_sampler = True
     input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
 
-    config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-concept-substring.json"
+    assert not extra_args.use_all or not extra_args.for_train, f"All substrings should be used in inference mode."
+
+    if extra_args.use_all:
+        config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-all-concept-substring.json"
+    else:
+        config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-concept-substring.json"
     config_key, fname = get_config_key(config_file)
 
     pkl_file = get_pkl_file(input_args.pickle_dir, f"msmarco_{fname}_distilbert-base-uncased", input_args.use_sxc_sampler, 
@@ -101,7 +107,14 @@ if __name__ == '__main__':
     dset = block.train.dset if extra_args.for_train else block.test.dset
 
     ## Load substring metadata
-    pred_file = f"{output_dir}/predictions/train_predictions.npz" if extra_args.for_train else f"{output_dir}/predictions/test_predictions.npz"
+    if extra_args.for_train:
+        pred_file = f"{output_dir}/predictions/train_predictions.npz" 
+    else:
+        pred_file = (
+            f"{output_dir}/predictions/test_predictions_all-substrings.npz"
+            if extra_args.use_all else 
+            f"{output_dir}/predictions/test_predictions.npz" 
+        )
     pred_lbl = retain_topk(sp.load_npz(pred_file), k=extra_args.topk)
 
     ## Load category metadata
@@ -134,6 +147,14 @@ if __name__ == '__main__':
             scores = np.array(scores.sum(axis=1)).flatten()
             idxs = np.argsort(scores)[:extra_args.num_examples]
 
-        fname = f"{example_dir}/train_examples_{index_type}.json" if extra_args.for_train else f"{example_dir}/test_examples_{index_type}.json"
+        if extra_args.for_train:
+            fname = f"{example_dir}/train_examples_{index_type}.json" 
+        else:
+            fname = (
+                f"{example_dir}/test_examples_all-substrings_{index_type}.json"
+                if extra_args.use_all else 
+                f"{example_dir}/test_examples_{index_type}.json" 
+            )
+
         disp_block.dump(fname, idxs)
 

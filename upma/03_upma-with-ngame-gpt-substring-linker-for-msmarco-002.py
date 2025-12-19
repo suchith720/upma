@@ -67,12 +67,16 @@ if __name__ == '__main__':
         label_names=["plbl2data_idx", "plbl2data_data2ptr", "lnk2data_idx", "lnk2data_data2ptr", "lnk2data_scores"],
     
         group_by_cluster=True,
+        use_data_metadata_for_clustering=True,
         num_clustering_warmup_epochs=10,
         num_cluster_update_epochs=5,
         num_cluster_size_update_epochs=25,
         clustering_type='EXPO',
         minimum_cluster_size=2,
         maximum_cluster_size=1600,
+
+        data_aug_meta_name="lnk",
+        use_label_metadata=False,
     
         metric_for_best_model='N@10',
         load_best_model_at_end=True,
