@@ -13,6 +13,7 @@ import torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.spars
 
 from typing import Optional
 from transformers import DistilBertConfig
+from xclib.utils.sparse import retain_topk
 
 from xcai.basics import *
 from xcai.models.upma import UPA000, UPMAConfig
@@ -46,12 +47,12 @@ if __name__ == '__main__':
                           "/data/datasets/beir/msmarco/XC/concept_substrings/raw_data/concept-substring.raw.csv", 
                           mname, sequence_length=64)
     pred_dir = f"/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/predictions/"
-    data_meta = sp.load_npz(f"{pred_dir}/test_predictions_{input_args.dataset.replace('/', '-')}.npz")
+    data_meta = retain_topk(sp.load_npz(f"{pred_dir}/test_predictions_{input_args.dataset.replace('/', '-')}.npz"), k=5)
     meta_dataset = SMetaXCDataset(prefix="lnk", data_meta=data_meta, meta_info=meta_info, n_sdata_meta_samples=5, 
                                   return_scores=True, meta_oversample=False) 
 
     # test dataset
-    test_dset = SXCDataset(block.test.dset, **{"lnk_meta": meta_dataset})
+    test_dset = SXCDataset(block.test.dset.data, **{"lnk_meta": meta_dataset})
 
     args = XCLearningArguments(
         output_dir=output_dir,

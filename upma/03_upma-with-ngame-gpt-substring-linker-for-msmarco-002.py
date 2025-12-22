@@ -97,7 +97,7 @@ if __name__ == '__main__':
         memory_module_names = ["embeddings"],
         memory_injection_layers = [6],
         
-        num_total_metadata = block.train.dset.meta["lnk_meta"].n_meta,
+        num_total_metadata = block.test.dset.meta["lnk_meta"].n_meta,
         num_input_metadata = 5,
         metadata_dropout = 0.1,
         
@@ -136,7 +136,7 @@ if __name__ == '__main__':
     )
 
     def model_fn(mname:Optional[str]=None):
-        meta_dset = block.train.dset.meta_dset("lnk_meta")
+        meta_dset = block.test.dset.meta_dset("lnk_meta")
         model = UPA000.from_pretrained(config, mname=mname, meta_dset=meta_dset, batch_size=1000)
         return model
     
