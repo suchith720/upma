@@ -5,7 +5,7 @@ __all__ = []
 
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 2
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5"
+os.environ["CUDA_VISIBLE_DEVICES"] = "8,9,10,11"
 
 import torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp
 
@@ -19,7 +19,7 @@ os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
 
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 21
 if __name__ == '__main__':
-    output_dir = "/home/aiscuser/scratch1/outputs/upma/03_upma-with-ngame-gpt-substring-linker-for-msmarco-001"
+    output_dir = "/home/aiscuser/scratch1/outputs/upma/03_upma-with-ngame-gpt-substring-linker-for-msmarco-005"
 
     input_args = parse_args()
     input_args.use_sxc_sampler = True
@@ -46,8 +46,8 @@ if __name__ == '__main__':
     args = XCLearningArguments(
         output_dir=output_dir,
         logging_first_step=True,
-        per_device_train_batch_size=64,
-        per_device_eval_batch_size=400,
+        per_device_train_batch_size=128,
+        per_device_eval_batch_size=800,
         representation_num_beams=200,
         representation_accumulation_steps=10,
         save_strategy="steps",
@@ -63,7 +63,7 @@ if __name__ == '__main__':
         adam_epsilon=1e-6,
         warmup_steps=1000,
         weight_decay=0.01,
-        learning_rate=6e-5,
+        learning_rate=6e-4,
         label_names=["plbl2data_idx", "plbl2data_data2ptr", "lnk2data_idx", "lnk2data_data2ptr", "lnk2data_scores"],
     
         group_by_cluster=True,
@@ -109,7 +109,7 @@ if __name__ == '__main__':
         lbl2data_inject_memory=False,
         neg2data_inject_memory=False,
         
-        data_repr_pooling=False,
+        data_repr_pooling=True,
         data_normalize=False,
     
         margin=0.3,
@@ -153,5 +153,5 @@ if __name__ == '__main__':
         compute_metrics=metric,
     )
 
-    main(learn, input_args, n_lbl=block.test.dset.n_lbl, resume_from_checkpoint=True)
+    main(learn, input_args, n_lbl=block.test.dset.n_lbl)
     

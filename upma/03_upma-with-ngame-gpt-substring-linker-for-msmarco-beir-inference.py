@@ -5,55 +5,65 @@ __all__ = []
 
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 2
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5"
+os.environ["NCCL_DEBUG"] = "NONE"
+os.environ["ROCM_DISABLE_WARNINGS"] = "1"
+os.environ["MIOPEN_LOG_LEVEL"] = "0"
 
 import torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp
 
+from typing import Optional
 from transformers import DistilBertConfig
 
 from xcai.basics import *
 from xcai.models.upma import UPA000, UPMAConfig
 
-# %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 4
-os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
-
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 21
 if __name__ == '__main__':
-    output_dir = "/home/aiscuser/scratch1/outputs/upma/03_upma-with-ngame-gpt-substring-linker-for-msmarco-001"
+    output_dir = "/data/outputs/upma/03_upma-with-ngame-gpt-substring-linker-for-msmarco-002"
 
     input_args = parse_args()
+    extra_args = additional_args()
+
+    input_args.only_test = True
     input_args.use_sxc_sampler = True
+    input_args.do_test_inference = True
+    input_args.save_test_prediction = True
     input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
 
     mname = "distilbert-base-uncased"
     do_inference = check_inference_mode(input_args)
 
-    if input_args.exact:
-        config_file = "configs/data_lbl_ngame-gpt-substring_ce-negatives-topk-05-linker_exact.json"
-    else:
-        config_file = "configs/data_lbl_ngame-gpt-substring.json" 
-
+    # basic dataset
+    config_file = f"/data/datasets/beir/{input_args.dataset}/XC/configs/data.json"
     config_key, fname = get_config_key(config_file)
-
-    pkl_file = get_pkl_file(input_args.pickle_dir, f"msmarco_{fname}_distilbert-base-uncased", input_args.use_sxc_sampler, 
+    pkl_file = get_pkl_file(input_args.pickle_dir, f"{input_args.dataset.replace('/', '-')}_{fname}_distilbert-base-uncased", input_args.use_sxc_sampler, 
                             input_args.exact, input_args.only_test)
-
-    os.makedirs(os.path.dirname(pkl_file), exist_ok=True)
     block = build_block(pkl_file, config_file, input_args.use_sxc_sampler, config_key, do_build=input_args.build_block, 
-                        only_test=input_args.only_test, main_oversample=True, meta_oversample=True, return_scores=True, 
-                        n_slbl_samples=1, n_sdata_meta_samples={"lnk_meta": 5, "neg_meta": 1})
+                        only_test=input_args.only_test, main_oversample=True, return_scores=True, n_slbl_samples=1) 
+
+    # metadata dataset
+    meta_info = load_info(f"{input_args.pickle_dir}/concept-substring.joblib",
+                          "/data/datasets/beir/msmarco/XC/concept_substrings/raw_data/concept-substring.raw.csv", 
+                          mname, sequence_length=64)
+    pred_dir = f"/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/predictions/"
+    data_meta = sp.load_npz(f"{pred_dir}/test_predictions_{input_args.dataset.replace('/', '-')}.npz")
+    meta_dataset = SMetaXCDataset(prefix="lnk", data_meta=data_meta, meta_info=meta_info, n_sdata_meta_samples=5, 
+                                  return_scores=True, meta_oversample=False) 
+
+    # test dataset
+    test_dset = SXCDataset(block.test.dset, **{"lnk_meta": meta_dataset})
 
     args = XCLearningArguments(
         output_dir=output_dir,
         logging_first_step=True,
-        per_device_train_batch_size=64,
-        per_device_eval_batch_size=400,
+        per_device_train_batch_size=128,
+        per_device_eval_batch_size=800,
         representation_num_beams=200,
         representation_accumulation_steps=10,
         save_strategy="steps",
         eval_strategy="steps",
-        eval_steps=1000,
-        save_steps=1000,
+        eval_steps=5000,
+        save_steps=5000,
         save_total_limit=5,
         num_train_epochs=50,
         predict_with_representation=True,
@@ -95,7 +105,7 @@ if __name__ == '__main__':
         memory_module_names = ["embeddings"],
         memory_injection_layers = [6],
         
-        num_total_metadata = block.train.dset.meta["lnk_meta"].n_meta,
+        num_total_metadata = test_dset.meta["lnk_meta"].n_meta,
         num_input_metadata = 5,
         metadata_dropout = 0.1,
         
@@ -109,7 +119,7 @@ if __name__ == '__main__':
         lbl2data_inject_memory=False,
         neg2data_inject_memory=False,
         
-        data_repr_pooling=False,
+        data_repr_pooling=True,
         data_normalize=False,
     
         margin=0.3,
@@ -133,25 +143,24 @@ if __name__ == '__main__':
         metadata_embedding_file=f"{output_dir}/metadata/gpt-substring.pth",
     )
 
-    def model_fn(mname):
-        meta_dset = block.train.dset.meta_dset("lnk_meta")
-        model = UPA000.from_pretrained(config, meta_dset=meta_dset, batch_size=1000)
+    def model_fn(mname:Optional[str]=None):
+        meta_dset = test_dset.meta_dset("lnk_meta")
+        model = UPA000.from_pretrained(config, mname=mname, meta_dset=meta_dset, batch_size=1000)
         return model
     
-    metric = PrecReclMrr(block.test.dset.n_lbl, block.test.data_lbl_filterer, pk=10, rk=200, rep_pk=[1, 3, 5, 10], 
+    metric = PrecReclMrr(test_dset.n_lbl, block.test.data_lbl_filterer, pk=10, rk=200, rep_pk=[1, 3, 5, 10], 
                          rep_rk=[10, 100, 200], mk=[5, 10, 20])
 
-    model = load_model(args.output_dir, model_fn, {"mname": mname}, do_inference=do_inference, 
-                       use_pretrained=input_args.use_pretrained)
+    model = load_model(args.output_dir, model_fn, do_inference=do_inference, use_pretrained=input_args.use_pretrained)
     
     learn = XCLearner(
         model=model,
         args=args,
         train_dataset=None if block.train is None else block.train.dset,
-        eval_dataset=block.test.dset,
+        eval_dataset=test_dset,
         data_collator=block.collator,
         compute_metrics=metric,
     )
 
-    main(learn, input_args, n_lbl=block.test.dset.n_lbl, resume_from_checkpoint=True)
+    main(learn, input_args, n_lbl=test_dset.n_lbl)
     

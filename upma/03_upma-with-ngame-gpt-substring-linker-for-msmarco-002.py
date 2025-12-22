@@ -10,6 +10,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "4,5,6,7"
 import torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp
 
 from transformers import DistilBertConfig
+from typing import Optional
 
 from xcai.basics import *
 from xcai.models.upma import UPA000, UPMAConfig
@@ -19,7 +20,7 @@ os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
 
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 21
 if __name__ == '__main__':
-    output_dir = "/home/aiscuser/scratch1/outputs/upma/03_upma-with-ngame-gpt-substring-linker-for-msmarco-002"
+    output_dir = "/data/outputs/upma/03_upma-with-ngame-gpt-substring-linker-for-msmarco-002"
 
     input_args = parse_args()
     input_args.use_sxc_sampler = True
@@ -29,9 +30,9 @@ if __name__ == '__main__':
     do_inference = check_inference_mode(input_args)
 
     if input_args.exact:
-        config_file = "configs/data_lbl_ngame-gpt-substring_ce-negatives-topk-05-linker_exact.json"
+        config_file = "configs/msmarco/data_lbl_ngame-gpt-substring_ce-negatives-topk-05-linker_exact.json"
     else:
-        config_file = "configs/data_lbl_ngame-gpt-substring.json" 
+        config_file = "configs/msmarco/data_lbl_ngame-gpt-substring.json" 
 
     config_key, fname = get_config_key(config_file)
 
@@ -41,7 +42,8 @@ if __name__ == '__main__':
     os.makedirs(os.path.dirname(pkl_file), exist_ok=True)
     block = build_block(pkl_file, config_file, input_args.use_sxc_sampler, config_key, do_build=input_args.build_block, 
                         only_test=input_args.only_test, main_oversample=True, meta_oversample=True, return_scores=True, 
-                        n_slbl_samples=1, n_sdata_meta_samples={"lnk_meta": 5, "neg_meta": 1})
+                        n_slbl_samples=1, n_sdata_meta_samples={"lnk_meta": 5, "neg_meta": 1}, 
+                        train_meta_topk={"lnk_meta":5}, test_meta_topk={"lnk_meta":5})
 
     args = XCLearningArguments(
         output_dir=output_dir,
@@ -52,8 +54,8 @@ if __name__ == '__main__':
         representation_accumulation_steps=10,
         save_strategy="steps",
         eval_strategy="steps",
-        eval_steps=1000,
-        save_steps=1000,
+        eval_steps=5000,
+        save_steps=5000,
         save_total_limit=5,
         num_train_epochs=50,
         predict_with_representation=True,
@@ -133,16 +135,15 @@ if __name__ == '__main__':
         metadata_embedding_file=f"{output_dir}/metadata/gpt-substring.pth",
     )
 
-    def model_fn(mname):
+    def model_fn(mname:Optional[str]=None):
         meta_dset = block.train.dset.meta_dset("lnk_meta")
-        model = UPA000.from_pretrained(config, meta_dset=meta_dset, batch_size=1000)
+        model = UPA000.from_pretrained(config, mname=mname, meta_dset=meta_dset, batch_size=1000)
         return model
     
     metric = PrecReclMrr(block.test.dset.n_lbl, block.test.data_lbl_filterer, pk=10, rk=200, rep_pk=[1, 3, 5, 10], 
                          rep_rk=[10, 100, 200], mk=[5, 10, 20])
 
-    model = load_model(args.output_dir, model_fn, {"mname": mname}, do_inference=do_inference, 
-                       use_pretrained=input_args.use_pretrained)
+    model = load_model(args.output_dir, model_fn, do_inference=do_inference, use_pretrained=input_args.use_pretrained)
     
     learn = XCLearner(
         model=model,

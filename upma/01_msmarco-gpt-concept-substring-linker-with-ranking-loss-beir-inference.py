@@ -4,26 +4,26 @@
 __all__ = []
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 3
-import os
-os.environ['CUDA_VISIBLE_DEVICES'] = "2,3"
-
-import torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
+import os, torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
 
 from xcai.basics import *
 from xcai.models.PPP0XX import DBT009, DBTConfig
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 5
-os.environ['WANDB_PROJECT'] = "01_upma-msmarco-gpt-concept-substring-linker"
-
 def additional_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--pct', type=float, default=1.0)
     parser.add_argument('--expt_no', type=int, required=True)
     return parser.parse_known_args()[0]
 
-def get_random_idx(n_data:int, pct:float):
-    n_trn = int(pct * n_data)
-    return np.random.permutation(n_data)[:n_trn]
+def load_info(save_file:str, meta_file:str, mname:str, sequence_length:int=32):
+    if os.path.exists(save_file):
+        meta_info = joblib.load(save_file)
+    else:
+        meta_info = Info.from_txt(meta_file, max_sequence_length=sequence_length, padding=True, return_tensors='pt', 
+                                  info_column_names=["identifier", "input_text"], tokenization_column="input_text", 
+                                  use_tokenizer=True, tokenizer=mname)
+        joblib.dump(meta_info, save_file)
+    return meta_info
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
@@ -33,29 +33,25 @@ if __name__ == '__main__':
     extra_args = additional_args()
 
     input_args.use_sxc_sampler = True
+    input_args.do_test_inference = True
+    input_args.save_test_prediction = True
     input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
 
-    config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-concept-substring.json"
-    config_key, fname = get_config_key(config_file)
-
     mname = "sentence-transformers/msmarco-distilbert-cos-v5"
-
-    pkl_file = get_pkl_file(input_args.pickle_dir, f"msmarco_{fname}_distilbert-base-uncased", input_args.use_sxc_sampler, 
-                            input_args.exact, input_args.only_test)
-
     do_inference = check_inference_mode(input_args)
 
-    os.makedirs(os.path.dirname(pkl_file), exist_ok=True)
-    block = build_block(pkl_file, config_file, input_args.use_sxc_sampler, config_key, do_build=input_args.build_block, only_test=input_args.only_test, 
-                        n_slbl_samples=1, main_oversample=False)
+    # test-data
+    test_info = load_info(f"{input_args.pickle_dir}/beir/{input_args.dataset.replace('/', '-')}.joblib", 
+                          f"/data/datasets/beir/{input_args.dataset}/XC/raw_data/test.raw.csv", 
+                          mname, sequence_length=32)
 
-    if do_inference: 
-        train_dset, test_dset = block.train.dset, block.test.dset
-    else: 
-        train_dset = block.train.dset.get_valid_dset()
-        test_dset = block.test.dset.get_valid_dset()
-        if extra_args.pct < 1.0: 
-            train_dset = train_dset._getitems(get_random_idx(len(train_dset), extra_args.pct))
+    # meta-data
+    meta_info = load_info(f"{input_args.pickle_dir}/concept-substring.joblib",
+                          "/data/datasets/beir/msmarco/XC/concept_substrings/raw_data/concept-substring.raw.csv", 
+                          mname, sequence_length=64)
+
+    # dataset
+    test_dset = SXCDataset(SMainXCDataset(data_info=test_info, lbl_info=meta_info))
 
     args = XCLearningArguments(
         output_dir=output_dir,
@@ -115,16 +111,12 @@ if __name__ == '__main__':
     model = load_model(args.output_dir, model_fn, {"mname": mname, "config": config}, do_inference=do_inference, 
                        use_pretrained=input_args.use_pretrained)
 
-    metric = PrecReclMrr(test_dset.data.n_lbl, test_dset.data.data_lbl_filterer, prop=train_dset.data.data_lbl, 
-                         pk=10, rk=200, rep_pk=[1, 3, 5, 10], rep_rk=[10, 100, 200], mk=[5, 10, 20])
-
     learn = XCLearner(
         model=model,
         args=args,
-        train_dataset=train_dset,
+        train_dataset=None,
         eval_dataset=test_dset,
-        data_collator=block.collator,
-        compute_metrics=metric,
+        data_collator=identity_collate_fn,
     )
     
     main(learn, input_args, n_lbl=test_dset.data.n_lbl, eval_k=10, train_k=10)
