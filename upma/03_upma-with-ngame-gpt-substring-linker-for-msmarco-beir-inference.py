@@ -23,7 +23,7 @@ if __name__ == '__main__':
     input_args = parse_args()
     extra_args = additional_args()
 
-    output_dir = "/data/outputs/upma/03_upma-with-ngame-gpt-substring-linker-for-msmarco-{extra_args.expt_no:03d}"
+    output_dir = f"/data/outputs/upma/03_upma-with-ngame-gpt-substring-linker-for-msmarco-{extra_args.expt_no:03d}"
 
     input_args.only_test = True
     input_args.use_sxc_sampler = True
@@ -35,7 +35,9 @@ if __name__ == '__main__':
     do_inference = check_inference_mode(input_args)
 
     # basic dataset
-    config_file = f"/data/datasets/beir/{input_args.dataset}/XC/configs/data.json"
+    config_file = f"/data/datasets/beir/{input_args.dataset}/XC/configs/data_exact.json"
+    input_args.exact = True
+
     config_key, fname = get_config_key(config_file)
     pkl_file = get_pkl_file(input_args.pickle_dir, f"{input_args.dataset.replace('/', '-')}_{fname}_distilbert-base-uncased", input_args.use_sxc_sampler, 
                             input_args.exact, input_args.only_test)
@@ -116,11 +118,11 @@ if __name__ == '__main__':
         lbl2data_aug_meta_prefix="lnk2lbl",
         neg2data_aug_meta_prefix="lnk2neg",
     
-        data_inject_memory=True if extra_args.expt_no == 2 else False,
+        data_inject_memory=True, 
         lbl2data_inject_memory=False,
         neg2data_inject_memory=False,
         
-        data_repr_pooling=True,
+        data_repr_pooling=True if extra_args.expt_no == 2 else False,
         data_normalize=False,
     
         margin=0.3,
