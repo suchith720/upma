@@ -20,7 +20,7 @@ os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
 
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 21
 if __name__ == '__main__':
-    output_dir = "/data/outputs/upma/03_upma-with-ngame-gpt-substring-linker-for-msmarco-001"
+    output_dir = "/home/aiscuser/scratch1/outputs/upma/04_upma-with-ngame-gpt-category-linker-for-msmarco-001"
 
     input_args = parse_args()
     input_args.use_sxc_sampler = True
@@ -30,9 +30,9 @@ if __name__ == '__main__':
     do_inference = check_inference_mode(input_args)
 
     if input_args.exact:
-        config_file = "configs/msmarco/data_lbl_ngame-gpt-substring_ce-negatives-topk-05-linker_exact.json"
+        config_file = "configs/msmarco/data_lbl_ngame-gpt-category-linker_ce-negatives-topk-05-linker_exact.json"
     else:
-        config_file = "configs/msmarco/data_lbl_ngame-gpt-substring.json" 
+        config_file = "configs/msmarco/data_lbl_ngame-gpt-category-linker.json" 
 
     config_key, fname = get_config_key(config_file)
 
@@ -42,7 +42,8 @@ if __name__ == '__main__':
     os.makedirs(os.path.dirname(pkl_file), exist_ok=True)
     block = build_block(pkl_file, config_file, input_args.use_sxc_sampler, config_key, do_build=input_args.build_block, 
                         only_test=input_args.only_test, main_oversample=True, meta_oversample=True, return_scores=True, 
-                        n_slbl_samples=1, n_sdata_meta_samples={"lnk_meta": 5, "neg_meta": 1})
+                        n_slbl_samples=1, n_sdata_meta_samples={"lnk_meta": 5, "neg_meta": 1}, 
+                        train_meta_topk={"lnk_meta": 5}, test_meta_topk={"lnk_meta": 5})
 
     args = XCLearningArguments(
         output_dir=output_dir,

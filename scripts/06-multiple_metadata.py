@@ -11,8 +11,8 @@ from xcai.basics import *
 from xcai.analysis import *
 
 DATASETS = [
-    "msmarco",
     "arguana",
+    "msmarco",
     "climate-fever",
     "dbpedia-entity",
     "fever",
@@ -60,7 +60,7 @@ if __name__ == '__main__':
 
     sub_output_dir = "/data/outputs/upma/03_upma-with-ngame-gpt-substring-linker-for-msmarco-002/predictions/"
 
-    info_file = "/data/datasets/beir/msmarco/XC/raw_data/category-gpt-linker_conflated-001_conflated-001.raw.csv"
+    info_file = "/data/datasets/beir/msmarco/XC/raw_data/category-gpt_conflated.raw.csv"
     cat_info = Info.from_txt(info_file, info_column_names=["identifier", "input_text"])
     cat_dir = "/data/outputs/mogicX/47_msmarco-gpt-category-linker-002/predictions/"
 
@@ -84,14 +84,14 @@ if __name__ == '__main__':
         data_lbl_sub = sp.load_npz(f"{sub_output_dir}/test_predictions_{dataset}.npz")
         data_lbl_cat = sp.load_npz(f"{cat_output_dir}/test_predictions_{dataset}.npz")
 
-        assert data_sub.shape == data_cat.shape
+        assert data_sub.shape[0] == data_cat.shape[0]
         assert data_lbl_sub.shape == data_lbl_cat.shape
 
         # Prediction scores
         sub_scores = pointwise_eval(data_lbl_sub, block.test.dset.data.data_lbl, topk=5, metric="P")
-        sub_scores = np.array(sub_scores.sum(axis=1)).flatten()
+        sub_scores = np.array(sub_scores.sum(axis=1)).flatten().tolist()
         cat_scores = pointwise_eval(data_lbl_cat, block.test.dset.data.data_lbl, topk=5, metric="P")
-        cat_scores = np.array(cat_scores.sum(axis=1)).flatten()
+        cat_scores = np.array(cat_scores.sum(axis=1)).flatten().tolist()
 
         # Dataset
         meta_kwargs = {
@@ -113,4 +113,6 @@ if __name__ == '__main__':
 
         with open(f"{example_dir}/test_examples_{dataset}.json", 'w') as file:
             json.dump(items, file, indent=4)
+
+        break
 
