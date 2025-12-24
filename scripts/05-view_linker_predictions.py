@@ -41,35 +41,50 @@ DATASETS = [
 
 def additional_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--num_examples', type=int, default=20) 
+    parser.add_argument('--num_examples', type=int, default=20)
     return parser.parse_known_args()[0]
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
     output_dir = "/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001"
+
     pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
     mname = "distilbert-base-uncased"
 
     extra_args = additional_args()
 
+    # Metadata information
+    info_file = "/data/datasets/beir/msmarco/XC/concept_substrings/raw_data/concept-substring.raw.csv"
+    sub_info = Info.from_txt(info_file, info_column_names=["identifier", "input_text"])
+
+    info_file = "/data/datasets/beir/msmarco/XC/raw_data/category-gpt-linker_conflated-001_conflated-001.raw.csv"
+    cat_info = Info.from_txt(info_file, info_column_names=["identifier", "input_text"])
+    cat_dir = "/data/outputs/mogicX/47_msmarco-gpt-category-linker-007/predictions/"
+
     for dataset in tqdm(DATASETS):
-        # test-data
-        test_info = load_info(f"{pickle_dir}/beir/{dataset.replace('/', '-')}.joblib", 
-                              f"/data/datasets/beir/{dataset}/XC/raw_data/test.raw.csv", 
-                              mname, sequence_length=32)
+        # basic dataset
+        config_file = f"/data/datasets/beir/{dataset}/XC/configs/data.json"
+        config_key, fname = get_config_key(config_file)
 
-        # meta-data
-        meta_info = load_info(f"{pickle_dir}/concept-substring.joblib",
-                              "/data/datasets/beir/msmarco/XC/concept_substrings/raw_data/concept-substring.raw.csv", 
-                              mname, sequence_length=64)
-
-        # test-meta matrix
         dataset = dataset.replace("/", "-")
-        data_lbl = sp.load_npz(f"{output_dir}/predictions/test_predictions_{dataset}.npz")
+        pkl_file = get_pkl_file(pickle_dir, f"{dataset}_{fname}_distilbert-base-uncased", use_sxc_sampler=True, use_only_test=True)
+        block = build_block(pkl_file, config_file, use_sxc=True, config_key=config_key, only_test=True, main_oversample=True,
+                            return_scores=True, n_slbl_samples=1)
+
+        # predicted-substring
+        data_sub = sp.load_npz(f"{output_dir}/predictions/test_predictions_{dataset}.npz")
+
+        # predicted-category
+        data_cat = sp.load_npz(f"{cat_dir}/test_predictions_{dataset}.npz")
+
+        assert data_sub.shape == data_cat.shape
 
         # dataset
-        test_dset = SXCDataset(SMainXCDataset(data_info=test_info, data_lbl=data_lbl, lbl_info=meta_info, return_scores=True))
-
+        meta_kwargs = {
+            "sub_meta": SMetaXCDataset(prefix="sub", data_meta=data_sub, meta_info=sub_info, return_scores=True),
+            "cat_meta": SMetaXCDataset(prefix="cat", data_meta=data_cat, meta_info=cat_info, return_scores=True),
+        }
+        test_dset = SXCDataset(block.test.dset.data, **meta_kwargs)
 
         # display
         example_dir = f"{output_dir}/examples"
@@ -77,6 +92,6 @@ if __name__ == '__main__':
         disp_block = TextDataset(test_dset, pattern=".*(_text|_scores)$", combine_info=True, sort_by="scores")
 
         np.random.seed(1000)
-        idxs = np.random.permutation(data_lbl.shape[0])[:extra_args.num_examples]
+        idxs = np.random.permutation(data_sub.shape[0])[:extra_args.num_examples]
         disp_block.dump(f"{example_dir}/test_examples_{dataset}.json", idxs)
 

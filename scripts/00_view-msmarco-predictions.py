@@ -123,7 +123,7 @@ if __name__ == '__main__':
     ## Predicted categories
     meta_dir = "/data/outputs/mogicX/47_msmarco-gpt-category-linker-007/predictions/"
     meta_file = f"{meta_dir}/train_predictions.npz" if extra_args.for_train else f"{meta_dir}/test_predictions.npz"
-    info_file = "/data/datasets/beir/msmarco/XC/concept_substrings/raw_data/concept-substring.raw.csv"
+    info_file = "/data/datasets/beir/msmarco/XC/raw_data/category-gpt-linker_conflated-001_conflated-001.raw.csv"
 
     meta_info = Info.from_txt(info_file, info_column_names=["identifier", "input_text"])
     meta_lbl = sp.load_npz(meta_file)
