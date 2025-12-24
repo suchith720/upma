@@ -25,13 +25,13 @@ if __name__ == '__main__':
     do_inference = check_inference_mode(input_args)
 
     # test-data
-    test_info = load_info(f"{input_args.pickle_dir}/beir/{input_args.dataset.replace('/', '-')}.joblib", 
-                          f"/data/datasets/beir/{input_args.dataset}/XC/raw_data/test.raw.csv", 
+    test_info = load_info(f"{input_args.pickle_dir}/beir/{input_args.dataset.replace('/', '-')}.joblib",
+                          f"/data/datasets/beir/{input_args.dataset}/XC/raw_data/test.raw.csv",
                           mname, sequence_length=32)
 
     # meta-data
     meta_info = load_info(f"{input_args.pickle_dir}/concept-substring.joblib",
-                          "/data/datasets/beir/msmarco/XC/concept_substrings/raw_data/concept-substring.raw.csv", 
+                          "/data/datasets/beir/msmarco/XC/concept_substrings/raw_data/concept-substring.raw.csv",
                           mname, sequence_length=64)
 
     # dataset
@@ -52,10 +52,11 @@ if __name__ == '__main__':
         num_train_epochs=300,
         predict_with_representation=True,
         representation_search_type='BRUTEFORCE',
-        adam_epsilon=1e-6,                                                                                                                                          warmup_steps=100,
+        adam_epsilon=1e-6,
+        warmup_steps=100,
         weight_decay=0.01,
         learning_rate=2e-4,
-    
+
         group_by_cluster=True,
         num_clustering_warmup_epochs=10,
         num_cluster_update_epochs=5,
@@ -63,12 +64,12 @@ if __name__ == '__main__':
         clustering_type='EXPO',
         minimum_cluster_size=2,
         maximum_cluster_size=1600,
-    
+
         metric_for_best_model='N@10',
         load_best_model_at_end=True,
         target_indices_key='plbl2data_idx',
         target_pointer_key='plbl2data_data2ptr',
-    
+
         use_encoder_parallel=True,
         max_grad_norm=None,
         fp16=True,
@@ -94,7 +95,7 @@ if __name__ == '__main__':
     def model_fn(mname, config):
         return DBT009.from_pretrained(mname, config=config)
 
-    model = load_model(args.output_dir, model_fn, {"mname": mname, "config": config}, do_inference=do_inference, 
+    model = load_model(args.output_dir, model_fn, {"mname": mname, "config": config}, do_inference=do_inference,
                        use_pretrained=input_args.use_pretrained)
 
     learn = XCLearner(
@@ -104,6 +105,6 @@ if __name__ == '__main__':
         eval_dataset=test_dset,
         data_collator=identity_collate_fn,
     )
-    
+
     main(learn, input_args, n_lbl=test_dset.data.n_lbl, eval_k=10, train_k=10)
-    
+
