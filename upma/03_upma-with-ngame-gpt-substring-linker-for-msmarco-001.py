@@ -5,9 +5,10 @@ __all__ = []
 
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 2
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
 
 import torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp
+from typing import Optional
 
 from transformers import DistilBertConfig
 
@@ -19,7 +20,7 @@ os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
 
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 21
 if __name__ == '__main__':
-    output_dir = "/home/aiscuser/scratch1/outputs/upma/03_upma-with-ngame-gpt-substring-linker-for-msmarco-001"
+    output_dir = "/data/outputs/upma/03_upma-with-ngame-gpt-substring-linker-for-msmarco-001"
 
     input_args = parse_args()
     input_args.use_sxc_sampler = True
@@ -29,9 +30,9 @@ if __name__ == '__main__':
     do_inference = check_inference_mode(input_args)
 
     if input_args.exact:
-        config_file = "configs/data_lbl_ngame-gpt-substring_ce-negatives-topk-05-linker_exact.json"
+        config_file = "configs/msmarco/data_lbl_ngame-gpt-substring_ce-negatives-topk-05-linker_exact.json"
     else:
-        config_file = "configs/data_lbl_ngame-gpt-substring.json" 
+        config_file = "configs/msmarco/data_lbl_ngame-gpt-substring.json" 
 
     config_key, fname = get_config_key(config_file)
 
@@ -133,9 +134,9 @@ if __name__ == '__main__':
         metadata_embedding_file=f"{output_dir}/metadata/gpt-substring.pth",
     )
 
-    def model_fn(mname):
+    def model_fn(mname:Optional[str]=None):
         meta_dset = block.train.dset.meta_dset("lnk_meta")
-        model = UPA000.from_pretrained(config, meta_dset=meta_dset, batch_size=1000)
+        model = UPA000.from_pretrained(config, mname=mname, meta_dset=meta_dset, batch_size=1000)
         return model
     
     metric = PrecReclMrr(block.test.dset.n_lbl, block.test.data_lbl_filterer, pk=10, rk=200, rep_pk=[1, 3, 5, 10], 
@@ -153,5 +154,5 @@ if __name__ == '__main__':
         compute_metrics=metric,
     )
 
-    main(learn, input_args, n_lbl=block.test.dset.n_lbl, resume_from_checkpoint=True)
+    main(learn, input_args, n_lbl=block.test.dset.n_lbl)
     

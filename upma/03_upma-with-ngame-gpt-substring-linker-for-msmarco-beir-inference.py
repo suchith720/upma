@@ -20,10 +20,10 @@ from xcai.models.upma import UPA000, UPMAConfig
 
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 21
 if __name__ == '__main__':
-    output_dir = "/data/outputs/upma/03_upma-with-ngame-gpt-substring-linker-for-msmarco-002"
-
     input_args = parse_args()
     extra_args = additional_args()
+
+    output_dir = "/data/outputs/upma/03_upma-with-ngame-gpt-substring-linker-for-msmarco-{extra_args.expt_no:03d}"
 
     input_args.only_test = True
     input_args.use_sxc_sampler = True
@@ -116,7 +116,7 @@ if __name__ == '__main__':
         lbl2data_aug_meta_prefix="lnk2lbl",
         neg2data_aug_meta_prefix="lnk2neg",
     
-        data_inject_memory=True,
+        data_inject_memory=True if extra_args.expt_no == 2 else False,
         lbl2data_inject_memory=False,
         neg2data_inject_memory=False,
         
