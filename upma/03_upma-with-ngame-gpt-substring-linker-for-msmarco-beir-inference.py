@@ -35,9 +35,7 @@ if __name__ == '__main__':
     do_inference = check_inference_mode(input_args)
 
     # basic dataset
-    config_file = f"/data/datasets/beir/{input_args.dataset}/XC/configs/data_exact.json"
-    input_args.exact = True
-
+    config_file = f"/data/datasets/beir/{input_args.dataset}/XC/configs/data.json"
     config_key, fname = get_config_key(config_file)
     pkl_file = get_pkl_file(input_args.pickle_dir, f"{input_args.dataset.replace('/', '-')}_{fname}_distilbert-base-uncased", input_args.use_sxc_sampler, 
                             input_args.exact, input_args.only_test)
@@ -60,7 +58,7 @@ if __name__ == '__main__':
         output_dir=output_dir,
         logging_first_step=True,
         per_device_train_batch_size=128,
-        per_device_eval_batch_size=800,
+        per_device_eval_batch_size=200,
         representation_num_beams=200,
         representation_accumulation_steps=10,
         save_strategy="steps",

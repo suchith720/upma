@@ -10,8 +10,6 @@ datasets="arguana msmarco climate-fever dbpedia-entity fever fiqa hotpotqa nfcor
 	cqadupstack/android cqadupstack/english cqadupstack/gaming cqadupstack/gis cqadupstack/mathematica cqadupstack/physics cqadupstack/programmers \
 	cqadupstack/stats cqadupstack/tex cqadupstack/unix cqadupstack/webmasters cqadupstack/wordpress"
 
-datasets="msmarco"
-
 result_file=results/03_upma-with-ngame-gpt-substring-linker-for-msmarco-$(printf "%03d" $1).txt
 for dataset in $datasets
 do
