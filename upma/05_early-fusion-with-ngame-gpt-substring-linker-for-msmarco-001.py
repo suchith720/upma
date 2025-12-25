@@ -13,55 +13,33 @@ from xcai.basics import *
 from xcai.models.PPP0XX import DBT009, DBTConfig
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 5
-os.environ['WANDB_PROJECT'] = "01_upma-msmarco-gpt-concept-substring-linker"
-
-def additional_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--pct', type=float, default=1.0)
-    parser.add_argument('--use_all', action="store_true")
-    return parser.parse_known_args()[0]
-
-def get_random_idx(n_data:int, pct:float):
-    n_trn = int(pct * n_data)
-    return np.random.permutation(n_data)[:n_trn]
+os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
-    output_dir = "/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001"
+    output_dir = "/home/aiscuser/scratch1/outputs/upma/05_early-fusion-with-ngame-gpt-substring-linker-for-msmarco-001"
 
     input_args = parse_args()
-    extra_args = additional_args()
 
     input_args.use_sxc_sampler = True
     input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
 
-    if extra_args.use_all:
-        config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-all-concept-substring.json"
-    else:
-        config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-concept-substring.json"
-        assert input_args.do_test_inference, f"All concept substrings should be used in inference mode"
-
-    config_key, fname = get_config_key(config_file)
-
-    mname = "sentence-transformers/msmarco-distilbert-cos-v5"
-
-    pkl_file = get_pkl_file(input_args.pickle_dir, f"msmarco_{fname}_distilbert-base-uncased", input_args.use_sxc_sampler, 
-                            input_args.exact, input_args.only_test)
-
+    mname = "distilbert-base-uncased"
     do_inference = check_inference_mode(input_args)
 
+    if input_args.exact:
+        config_file = "configs/msmarco/data-ngame-gpt-substring_lbl_ce-negatives-topk-05-linker_exact.json"
+    else:
+        config_file = "configs/msmarco/data-ngame-gpt-substring_lbl.json"
+    config_key, fname = get_config_key(config_file)
+    pkl_file = get_pkl_file(input_args.pickle_dir, f"msmarco_{fname}_distilbert-base-uncased", input_args.use_sxc_sampler, 
+                            input_args.exact, input_args.only_test)
     os.makedirs(os.path.dirname(pkl_file), exist_ok=True)
     block = build_block(pkl_file, config_file, input_args.use_sxc_sampler, config_key, do_build=input_args.build_block, only_test=input_args.only_test, 
                         n_slbl_samples=1, main_oversample=False)
 
-    if do_inference: 
-        train_dset, test_dset = None if block.train is None else block.train.dset, block.test.dset
-    else: 
-        train_dset = block.train.dset.get_valid_dset()
-        test_dset = block.test.dset.get_valid_dset()
-        if extra_args.pct < 1.0: 
-            train_dset = train_dset._getitems(get_random_idx(len(train_dset), extra_args.pct))
-    
+    train_dset, test_dset = None if block.train is None else block.train.dset, block.test.dset
+
     args = XCLearningArguments(
         output_dir=output_dir,
         logging_first_step=True,
@@ -77,7 +55,8 @@ if __name__ == '__main__':
         num_train_epochs=300,
         predict_with_representation=True,
         representation_search_type='BRUTEFORCE',
-        adam_epsilon=1e-6,                                                                                                                                          warmup_steps=100,
+        adam_epsilon=1e-6,
+        warmup_steps=100,
         weight_decay=0.01,
         learning_rate=2e-4,
     
