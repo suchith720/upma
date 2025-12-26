@@ -5,7 +5,7 @@ __all__ = []
 
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 2
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2,3,4,5"
 
 import torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp
 from typing import Optional
@@ -54,8 +54,8 @@ if __name__ == '__main__':
         representation_accumulation_steps=10,
         save_strategy="steps",
         eval_strategy="steps",
-        eval_steps=1000,
-        save_steps=1000,
+        eval_steps=5000,
+        save_steps=5000,
         save_total_limit=5,
         num_train_epochs=50,
         predict_with_representation=True,
@@ -111,7 +111,7 @@ if __name__ == '__main__':
         lbl2data_inject_memory=False,
         neg2data_inject_memory=False,
         
-        data_repr_pooling=False,
+        data_repr_pooling=True,
         data_normalize=False,
     
         margin=0.3,

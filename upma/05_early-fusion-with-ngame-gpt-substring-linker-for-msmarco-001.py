@@ -8,43 +8,24 @@ import os
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1"
 
 import torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
+from typing import Optional, Union, Callable
+from tqdm.auto import tqdm
 
 from xcai.basics import *
-from xcai.models.PPP0XX import DBT009, DBTConfig
+from xcai.models.PPP0XX import DBT023, DBTConfig
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 5
 os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
 
-# %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
-if __name__ == '__main__':
-    output_dir = "/home/aiscuser/scratch1/outputs/upma/05_early-fusion-with-ngame-gpt-substring-linker-for-msmarco-001"
 
-    input_args = parse_args()
-
-    input_args.use_sxc_sampler = True
-    input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
-
-    mname = "distilbert-base-uncased"
-    do_inference = check_inference_mode(input_args)
-
-    if input_args.exact:
-        config_file = "configs/msmarco/data-ngame-gpt-substring_lbl_ce-negatives-topk-05-linker_exact.json"
-    else:
-        config_file = "configs/msmarco/data-ngame-gpt-substring_lbl.json"
-    config_key, fname = get_config_key(config_file)
-    pkl_file = get_pkl_file(input_args.pickle_dir, f"msmarco_{fname}_distilbert-base-uncased", input_args.use_sxc_sampler, 
-                            input_args.exact, input_args.only_test)
-    os.makedirs(os.path.dirname(pkl_file), exist_ok=True)
-    block = build_block(pkl_file, config_file, input_args.use_sxc_sampler, config_key, do_build=input_args.build_block, only_test=input_args.only_test, 
-                        n_slbl_samples=1, main_oversample=False)
-
-    train_dset, test_dset = None if block.train is None else block.train.dset, block.test.dset
+def run(output_dir:str, input_args:argparse.ArgumentParser, test_dset:Union[XCDataset, SXCDataset], train_dset:Optional[Union[XCDataset, SXCDataset]]=None, 
+        collator:Optional[Callable]=identity_collate_fn):
 
     args = XCLearningArguments(
         output_dir=output_dir,
         logging_first_step=True,
-        per_device_train_batch_size=800,
-        per_device_eval_batch_size=800,
+        per_device_train_batch_size=128,
+        per_device_eval_batch_size=1600,
         representation_num_beams=200,
         representation_accumulation_steps=10,
         save_strategy="steps",
@@ -52,13 +33,16 @@ if __name__ == '__main__':
         eval_steps=5000,
         save_steps=5000,
         save_total_limit=5,
-        num_train_epochs=300,
+        num_train_epochs=50,
         predict_with_representation=True,
         representation_search_type='BRUTEFORCE',
+        search_normalize=False, 
+
         adam_epsilon=1e-6,
-        warmup_steps=100,
+        warmup_steps=1000,
         weight_decay=0.01,
-        learning_rate=2e-4,
+        learning_rate=6e-5,
+        label_names=['plbl2data_idx', 'plbl2data_data2ptr'],
     
         group_by_cluster=True,
         num_clustering_warmup_epochs=10,
@@ -68,7 +52,7 @@ if __name__ == '__main__':
         minimum_cluster_size=2,
         maximum_cluster_size=1600,
     
-        metric_for_best_model='N@10',
+        metric_for_best_model='P@1',
         load_best_model_at_end=True,
         target_indices_key='plbl2data_idx',
         target_pointer_key='plbl2data_data2ptr',
@@ -82,22 +66,15 @@ if __name__ == '__main__':
     )
 
     config = DBTConfig(
-        margin = 0.3,
-        num_negatives = 10,
-        tau = 0.1,
-        apply_softmax = True,
-        reduction = "mean",
-
-        normalize = True,
-        use_layer_norm = True,
-
+        normalize = False,
+        use_layer_norm = False,
         use_encoder_parallel = True,
-        loss_function = "triplet"
     )
 
     def model_fn(mname, config):
-        return DBT009.from_pretrained(mname, config=config)
+        return DBT023.from_pretrained(mname, config=config)
 
+    do_inference = check_inference_mode(input_args)
     model = load_model(args.output_dir, model_fn, {"mname": mname, "config": config}, do_inference=do_inference, 
                        use_pretrained=input_args.use_pretrained)
 
@@ -109,9 +86,73 @@ if __name__ == '__main__':
         args=args,
         train_dataset=train_dset,
         eval_dataset=test_dset,
-        data_collator=block.collator,
+        data_collator=collator,
         compute_metrics=metric,
     )
     
-    main(learn, input_args, n_lbl=test_dset.data.n_lbl, eval_k=10, train_k=10)
-    
+    return main(learn, input_args, n_lbl=test_dset.data.n_lbl, eval_k=10, train_k=10)
+
+
+def load_block(dataset:str, config_file:str, input_args:argparse.ArgumentParser):
+    config_key, fname = get_config_key(config_file)
+    pkl_file = get_pkl_file(input_args.pickle_dir, f"{dataset}_{fname}_distilbert-base-uncased", input_args.use_sxc_sampler, 
+                            input_args.exact, input_args.only_test)
+
+    os.makedirs(os.path.dirname(pkl_file), exist_ok=True)
+    block = build_block(pkl_file, config_file, input_args.use_sxc_sampler, config_key, do_build=input_args.build_block, 
+                        only_test=input_args.only_test, n_slbl_samples=1, main_oversample=False, n_sdata_meta_samples=1, 
+                        meta_oversample=False, return_scores=True)
+    train_dset, test_dset = None if block.train is None else block.train.dset, block.test.dset
+
+    return train_dset, test_dset 
+
+
+def beir_inference(output_dir:str, input_args:argparse.ArgumentParser):
+    metric_dir = f"{output_dir}/metrics"
+    os.makedirs(metric_dir, exist_ok=True)
+
+    input_args.only_test = input_args.do_test_inference = input_args.save_test_prediction = True
+
+    beir_metrics = {}
+    for dataset in tqdm(DATASETS):
+        print(dataset)
+
+        config_file = f"/data/datasets/beir/{dataset}/XC/configs/data.json"
+        train_dset, test_dset = load_block(dataset, config_file, input_args)
+
+        dataset = dataset.replace("/", "-")
+        save_file = f"{input_args.pickle_dir}/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/{dataset}.joblib"
+        meta_file = f"/home/aiscuser/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/raw_data/test_{dataset}.raw.csv"
+        data_info = load_info(save_file, meta_file, mname, sequence_length=128)
+        test_dset = SXCDataset(SMainXCDataset(data_info=data_info, data_lbl=test_dset.data.data_lbl, lbl_info=test_dset.data.lbl_info))
+
+        trn_repr, tst_repr, lbl_repr, trn_pred, tst_pred, trn_metric, tst_metric = run(output_dir, input_args, test_dset, train_dset)
+        with open(f"{metric_dir}/{dataset}.json") as file:
+            json.dump({dataset: tst_metric}, file, indent=4)
+
+        beir_metrics[dataset] = tst_metric
+
+    with open(f"{metric_dir}/beir.json") as file:
+        json.dump(beir_metrics, file, indent=4)
+
+# %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
+if __name__ == '__main__':
+    input_args = parse_args()
+
+    output_dir = "/home/aiscuser/scratch1/outputs/upma/05_early-fusion-with-ngame-gpt-substring-linker-for-msmarco-001"
+
+    input_args.use_sxc_sampler = True
+    input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
+    mname = "distilbert-base-uncased"
+
+    if input_args.beir_mode:
+        beir_inference(output_dir, input_args)
+    else:
+        config_file = (
+            "configs/msmarco/data-ngame-gpt-substring_lbl_ce-negatives-topk-05-linker_exact.json"
+            if input_args.exact else
+            "configs/msmarco/data-ngame-gpt-substring_lbl.json"
+        )
+        train_dset, test_dset = load_block("msmarco", config_file, input_args)
+        run(output_dir, input_args, test_dset, train_dset)
+

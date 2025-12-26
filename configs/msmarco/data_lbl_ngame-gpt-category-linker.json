@@ -2,22 +2,22 @@
     "data_lbl_ngame-gpt-category-linker": {
         "path": {
             "train": {
-                "data_lbl": "/data/datasets/beir/msmarco/XC//trn_X_Y.npz",
-                "data_info": "/data/datasets/beir/msmarco/XC//raw_data/train.raw.txt",
-                "lbl_info": "/data/datasets/beir/msmarco/XC//raw_data/label.raw.txt",
+                "data_lbl": "/home/aiscuser/data/datasets/beir/msmarco/XC//trn_X_Y.npz",
+                "data_info": "/home/aiscuser/data/datasets/beir/msmarco/XC//raw_data/train.raw.txt",
+                "lbl_info": "/home/aiscuser/data/datasets/beir/msmarco/XC//raw_data/label.raw.txt",
                 "lnk_meta": {
                     "prefix": "lnk",
-                    "data_meta": "/data/outputs/mogicX/47_msmarco-gpt-category-linker-008/predictions/train_predictions.npz",
-                    "meta_info": "/data/datasets/beir/msmarco/XC/raw_data/category-gpt-linker_conflated-001_conflated-001.raw.csv"
+                    "data_meta": "/home/aiscuser/data/outputs/mogicX/47_msmarco-gpt-category-linker-008/predictions/train_predictions.npz",
+                    "meta_info": "/home/aiscuser/data/datasets/beir/msmarco/XC/raw_data/category-gpt-linker_conflated-001_conflated-001.raw.csv"
                 }
             },
             "test": {
-                "data_lbl": "/data/datasets/beir/msmarco/XC//tst_X_Y.npz",
-                "data_info": "/data/datasets/beir/msmarco/XC//raw_data/test.raw.txt",
+                "data_lbl": "/home/aiscuser/data/datasets/beir/msmarco/XC//tst_X_Y.npz",
+                "data_info": "/home/aiscuser/data/datasets/beir/msmarco/XC//raw_data/test.raw.txt",
                 "lnk_meta": {
                     "prefix": "lnk",
-                    "data_meta": "/data/outputs/mogicX/47_msmarco-gpt-category-linker-007/predictions/test_predictions.npz",
-                    "meta_info": "/data/datasets/beir/msmarco/XC/raw_data/category-gpt-linker_conflated-001_conflated-001.raw.csv"
+                    "data_meta": "/home/aiscuser/data/outputs/mogicX/47_msmarco-gpt-category-linker-007/predictions/test_predictions.npz",
+                    "meta_info": "/home/aiscuser/data/datasets/beir/msmarco/XC/raw_data/category-gpt-linker_conflated-001_conflated-001.raw.csv"
                 }
             }
         },

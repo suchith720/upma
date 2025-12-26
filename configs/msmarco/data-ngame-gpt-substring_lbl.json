@@ -2,13 +2,13 @@
     "data-ngame-gpt-substring_lbl": {
         "path": {
             "train": {
-                "data_lbl": "/data/datasets/beir/msmarco/XC//trn_X_Y.npz",
-                "data_info": "/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/raw_data/train_msmarco.raw.csv",
-                "lbl_info": "/data/datasets/beir/msmarco/XC//raw_data/label.raw.txt"
+                "data_lbl": "/home/aiscuser/data/datasets/beir/msmarco/XC//trn_X_Y.npz",
+                "data_info": "/home/aiscuser/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/raw_data/train_msmarco.raw.csv",
+                "lbl_info": "/home/aiscuser/data/datasets/beir/msmarco/XC//raw_data/label.raw.txt"
             },
             "test": {
-                "data_lbl": "/data/datasets/beir/msmarco/XC//tst_X_Y.npz",
-                "data_info": "/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/raw_data/test_msmarco.raw.csv"
+                "data_lbl": "/home/aiscuser/data/datasets/beir/msmarco/XC//tst_X_Y.npz",
+                "data_info": "/home/aiscuser/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/raw_data/test_msmarco.raw.csv"
             }
         },
         "parameters": {
