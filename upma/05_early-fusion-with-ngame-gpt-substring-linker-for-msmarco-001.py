@@ -122,7 +122,7 @@ def beir_inference(output_dir:str, input_args:argparse.ArgumentParser, mname:str
 
         dataset = dataset.replace("/", "-")
         save_file = f"{input_args.pickle_dir}/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/{dataset}.joblib"
-        meta_file = f"/home/aiscuser/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/raw_data/test_{dataset}.raw.csv"
+        meta_file = f"/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/raw_data/test_{dataset}.raw.csv"
         data_info = load_info(save_file, meta_file, mname, sequence_length=128)
         test_dset = SXCDataset(SMainXCDataset(data_info=data_info, data_lbl=test_dset.data.data_lbl, lbl_info=test_dset.data.lbl_info))
 
@@ -132,7 +132,7 @@ def beir_inference(output_dir:str, input_args:argparse.ArgumentParser, mname:str
 
         beir_metrics[dataset] = tst_metric
 
-    with open(f"{metric_dir}/beir.json") as file:
+    with open(f"{metric_dir}/beir.json", "w") as file:
         json.dump(beir_metrics, file, indent=4)
 
 
@@ -140,7 +140,7 @@ def beir_inference(output_dir:str, input_args:argparse.ArgumentParser, mname:str
 if __name__ == '__main__':
     input_args = parse_args()
 
-    output_dir = "/home/aiscuser/scratch1/outputs/upma/05_early-fusion-with-ngame-gpt-substring-linker-for-msmarco-001"
+    output_dir = "/data/outputs/upma/05_early-fusion-with-ngame-gpt-substring-linker-for-msmarco-001"
 
     input_args.use_sxc_sampler = True
     input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
