@@ -12,6 +12,7 @@ from typing import Optional, Union, Callable
 from tqdm.auto import tqdm
 
 from transformers import DistilBertConfig
+from xclib.utils.sparse import retain_topk
 
 from xcai.basics import *
 from xcai.models.upma import UPA000, UPMAConfig
@@ -132,7 +133,7 @@ def run(output_dir:str, input_args:argparse.ArgumentParser, mname:str, test_dset
         compute_metrics=metric,
     )
 
-    main(learn, input_args, n_lbl=test_dset.n_lbl)
+    return main(learn, input_args, n_lbl=test_dset.n_lbl)
 
 
 def load_block(dataset:str, config_file:str, input_args:argparse.ArgumentParser):
@@ -156,6 +157,10 @@ def beir_inference(output_dir:str, input_args:argparse.ArgumentParser, mname:str
 
     input_args.only_test = input_args.do_test_inference = input_args.save_test_prediction = True
 
+    save_file = f"{input_args.pickle_dir}/category-gpt-linker_conflated-001_conflated-001.joblib"
+    meta_file = "/data/datasets/beir/msmarco/XC/raw_data/category-gpt-linker_conflated-001_conflated-001.raw.csv"
+    meta_info = load_info(save_file, meta_file, mname, sequence_length=64)
+
     beir_metrics = {}
     for dataset in tqdm(DATASETS):
         print(dataset)
@@ -164,24 +169,20 @@ def beir_inference(output_dir:str, input_args:argparse.ArgumentParser, mname:str
         train_dset, test_dset = load_block(dataset, config_file, input_args)
 
         dataset = dataset.replace("/", "-")
-        save_file = f"{input_args.pickle_dir}/category-gpt-linker_conflated-001_conflated-001.joblib"
-        meta_file = "/home/aiscuser/data/datasets/beir/msmarco/XC/raw_data/category-gpt-linker_conflated-001_conflated-001.raw.csv"
-        meta_info = load_info(save_file, meta_file, mname, sequence_length=64)
-
-        data_meta = sp.load_npz(f"/data/outputs/mogicX/47_msmarco-gpt-category-linker-007/predictions/test_predictions_{dataset}.npz")
-
+        data_meta = retain_topk(sp.load_npz(f"/data/outputs/mogicX/47_msmarco-gpt-category-linker-007/predictions/test_predictions_{dataset}.npz"), k=5)
         meta_kwargs = {
-            "lnk_meta": SMetaXCDataset(prefix="lnk", data_meta=data_meta, meta_info=meta_info),
+            "lnk_meta": SMetaXCDataset(prefix="lnk", data_meta=data_meta, meta_info=meta_info, n_sdata_meta_samples=5, 
+                                       return_scores=True, meta_oversample=True),
         }
         test_dset = SXCDataset(test_dset.data, **meta_kwargs)
 
         trn_repr, tst_repr, lbl_repr, trn_pred, tst_pred, trn_metric, tst_metric = run(output_dir, input_args, mname, test_dset, train_dset)
-        with open(f"{metric_dir}/{dataset}.json") as file:
+        with open(f"{metric_dir}/{dataset}.json", "w") as file:
             json.dump({dataset: tst_metric}, file, indent=4)
 
         beir_metrics[dataset] = tst_metric
 
-    with open(f"{metric_dir}/beir.json") as file:
+    with open(f"{metric_dir}/beir.json", "w") as file:
         json.dump(beir_metrics, file, indent=4)
 
 
@@ -189,7 +190,7 @@ def beir_inference(output_dir:str, input_args:argparse.ArgumentParser, mname:str
 if __name__ == '__main__':
     input_args = parse_args()
 
-    output_dir = "/home/aiscuser/scratch1/outputs/upma/04_upma-with-ngame-gpt-category-linker-for-msmarco-001"
+    output_dir = "/data/outputs/upma/04_upma-with-ngame-gpt-category-linker-for-msmarco-001"
 
     input_args.use_sxc_sampler = True
     input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
