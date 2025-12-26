@@ -5,10 +5,11 @@ __all__ = []
 
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 2
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "2,3,4,5"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 
-import torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp
-from typing import Optional
+import torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
+from typing import Optional, Union, Callable
+from tqdm.auto import tqdm
 
 from transformers import DistilBertConfig
 
@@ -18,32 +19,9 @@ from xcai.models.upma import UPA000, UPMAConfig
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 4
 os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
 
-# %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 21
-if __name__ == '__main__':
-    output_dir = "/home/aiscuser/scratch1/outputs/upma/04_upma-with-ngame-gpt-category-linker-for-msmarco-001"
 
-    input_args = parse_args()
-    input_args.use_sxc_sampler = True
-    input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
-
-    mname = "distilbert-base-uncased"
-    do_inference = check_inference_mode(input_args)
-
-    if input_args.exact:
-        config_file = "configs/msmarco/data_lbl_ngame-gpt-category-linker_ce-negatives-topk-05-linker_exact.json"
-    else:
-        config_file = "configs/msmarco/data_lbl_ngame-gpt-category-linker.json" 
-
-    config_key, fname = get_config_key(config_file)
-
-    pkl_file = get_pkl_file(input_args.pickle_dir, f"msmarco_{fname}_distilbert-base-uncased", input_args.use_sxc_sampler, 
-                            input_args.exact, input_args.only_test)
-
-    os.makedirs(os.path.dirname(pkl_file), exist_ok=True)
-    block = build_block(pkl_file, config_file, input_args.use_sxc_sampler, config_key, do_build=input_args.build_block, 
-                        only_test=input_args.only_test, main_oversample=True, meta_oversample=True, return_scores=True, 
-                        n_slbl_samples=1, n_sdata_meta_samples={"lnk_meta": 5, "neg_meta": 1}, 
-                        train_meta_topk={"lnk_meta": 5}, test_meta_topk={"lnk_meta": 5})
+def run(output_dir:str, input_args:argparse.ArgumentParser, mname:str, test_dset:Union[XCDataset, SXCDataset], 
+        train_dset:Optional[Union[XCDataset, SXCDataset]]=None, collator:Optional[Callable]=identity_collate_fn):
 
     args = XCLearningArguments(
         output_dir=output_dir,
@@ -97,7 +75,7 @@ if __name__ == '__main__':
         memory_module_names = ["embeddings"],
         memory_injection_layers = [6],
         
-        num_total_metadata = block.test.dset.meta["lnk_meta"].n_meta,
+        num_total_metadata = test_dset.meta["lnk_meta"].n_meta,
         num_input_metadata = 5,
         metadata_dropout = 0.1,
         
@@ -136,23 +114,95 @@ if __name__ == '__main__':
     )
 
     def model_fn(mname:Optional[str]=None):
-        meta_dset = block.test.dset.meta_dset("lnk_meta")
+        meta_dset = test_dset.meta_dset("lnk_meta")
         model = UPA000.from_pretrained(config, mname=mname, meta_dset=meta_dset, batch_size=1000)
         return model
     
-    metric = PrecReclMrr(block.test.dset.n_lbl, block.test.data_lbl_filterer, pk=10, rk=200, rep_pk=[1, 3, 5, 10], 
+    metric = PrecReclMrr(test_dset.n_lbl, test_dset.data.data_lbl_filterer, pk=10, rk=200, rep_pk=[1, 3, 5, 10], 
                          rep_rk=[10, 100, 200], mk=[5, 10, 20])
 
-    model = load_model(args.output_dir, model_fn, do_inference=do_inference, use_pretrained=input_args.use_pretrained)
+    model = load_model(args.output_dir, model_fn, do_inference=check_inference_mode(input_args), use_pretrained=input_args.use_pretrained)
     
     learn = XCLearner(
         model=model,
         args=args,
-        train_dataset=None if block.train is None else block.train.dset,
-        eval_dataset=block.test.dset,
-        data_collator=block.collator,
+        train_dataset=train_dset,
+        eval_dataset=test_dset,
+        data_collator=collator,
         compute_metrics=metric,
     )
 
-    main(learn, input_args, n_lbl=block.test.dset.n_lbl)
+    main(learn, input_args, n_lbl=test_dset.n_lbl)
+
+
+def load_block(dataset:str, config_file:str, input_args:argparse.ArgumentParser):
+    config_key, fname = get_config_key(config_file)
+    pkl_file = get_pkl_file(input_args.pickle_dir, f"{dataset}_{fname}_distilbert-base-uncased", input_args.use_sxc_sampler, 
+                            input_args.exact, input_args.only_test)
+
+    os.makedirs(os.path.dirname(pkl_file), exist_ok=True)
+    block = build_block(pkl_file, config_file, input_args.use_sxc_sampler, config_key, do_build=input_args.build_block, 
+                        only_test=input_args.only_test, main_oversample=True, meta_oversample=True, return_scores=True, 
+                        n_slbl_samples=1, n_sdata_meta_samples={"lnk_meta": 5, "neg_meta": 1}, 
+                        train_meta_topk={"lnk_meta": 5}, test_meta_topk={"lnk_meta": 5})
+    train_dset, test_dset = None if block.train is None else block.train.dset, block.test.dset
+
+    return train_dset, test_dset 
     
+
+def beir_inference(output_dir:str, input_args:argparse.ArgumentParser, mname:str):
+    metric_dir = f"{output_dir}/metrics"
+    os.makedirs(metric_dir, exist_ok=True)
+
+    input_args.only_test = input_args.do_test_inference = input_args.save_test_prediction = True
+
+    beir_metrics = {}
+    for dataset in tqdm(DATASETS):
+        print(dataset)
+
+        config_file = f"/data/datasets/beir/{dataset}/XC/configs/data.json"
+        train_dset, test_dset = load_block(dataset, config_file, input_args)
+
+        dataset = dataset.replace("/", "-")
+        save_file = f"{input_args.pickle_dir}/category-gpt-linker_conflated-001_conflated-001.joblib"
+        meta_file = "/home/aiscuser/data/datasets/beir/msmarco/XC/raw_data/category-gpt-linker_conflated-001_conflated-001.raw.csv"
+        meta_info = load_info(save_file, meta_file, mname, sequence_length=64)
+
+        data_meta = sp.load_npz(f"/data/outputs/mogicX/47_msmarco-gpt-category-linker-007/predictions/test_predictions_{dataset}.npz")
+
+        meta_kwargs = {
+            "lnk_meta": SMetaXCDataset(prefix="lnk", data_meta=data_meta, meta_info=meta_info),
+        }
+        test_dset = SXCDataset(test_dset.data, **meta_kwargs)
+
+        trn_repr, tst_repr, lbl_repr, trn_pred, tst_pred, trn_metric, tst_metric = run(output_dir, input_args, mname, test_dset, train_dset)
+        with open(f"{metric_dir}/{dataset}.json") as file:
+            json.dump({dataset: tst_metric}, file, indent=4)
+
+        beir_metrics[dataset] = tst_metric
+
+    with open(f"{metric_dir}/beir.json") as file:
+        json.dump(beir_metrics, file, indent=4)
+
+
+# %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 21
+if __name__ == '__main__':
+    input_args = parse_args()
+
+    output_dir = "/home/aiscuser/scratch1/outputs/upma/04_upma-with-ngame-gpt-category-linker-for-msmarco-001"
+
+    input_args.use_sxc_sampler = True
+    input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
+    mname = "distilbert-base-uncased"
+
+    if input_args.beir_mode:
+        beir_inference(output_dir, input_args, mname)
+    else:
+        config_file = (
+            "configs/msmarco/data_lbl_ngame-gpt-category-linker_ce-negatives-topk-05-linker_exact.json"
+            if input_args.exact else
+            "configs/msmarco/data_lbl_ngame-gpt-category-linker.json"
+        )
+        train_dset, test_dset = load_block("msmarco", config_file, input_args)
+        run(output_dir, input_args, mname, test_dset, train_dset)
+

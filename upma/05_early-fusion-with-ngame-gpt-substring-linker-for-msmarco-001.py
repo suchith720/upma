@@ -18,8 +18,8 @@ from xcai.models.PPP0XX import DBT023, DBTConfig
 os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
 
 
-def run(output_dir:str, input_args:argparse.ArgumentParser, test_dset:Union[XCDataset, SXCDataset], train_dset:Optional[Union[XCDataset, SXCDataset]]=None, 
-        collator:Optional[Callable]=identity_collate_fn):
+def run(output_dir:str, input_args:argparse.ArgumentParser, mname:str, test_dset:Union[XCDataset, SXCDataset], 
+        train_dset:Optional[Union[XCDataset, SXCDataset]]=None, collator:Optional[Callable]=identity_collate_fn):
 
     args = XCLearningArguments(
         output_dir=output_dir,
@@ -107,7 +107,7 @@ def load_block(dataset:str, config_file:str, input_args:argparse.ArgumentParser)
     return train_dset, test_dset 
 
 
-def beir_inference(output_dir:str, input_args:argparse.ArgumentParser):
+def beir_inference(output_dir:str, input_args:argparse.ArgumentParser, mname:str):
     metric_dir = f"{output_dir}/metrics"
     os.makedirs(metric_dir, exist_ok=True)
 
@@ -126,7 +126,7 @@ def beir_inference(output_dir:str, input_args:argparse.ArgumentParser):
         data_info = load_info(save_file, meta_file, mname, sequence_length=128)
         test_dset = SXCDataset(SMainXCDataset(data_info=data_info, data_lbl=test_dset.data.data_lbl, lbl_info=test_dset.data.lbl_info))
 
-        trn_repr, tst_repr, lbl_repr, trn_pred, tst_pred, trn_metric, tst_metric = run(output_dir, input_args, test_dset, train_dset)
+        trn_repr, tst_repr, lbl_repr, trn_pred, tst_pred, trn_metric, tst_metric = run(output_dir, input_args, mname, test_dset, train_dset)
         with open(f"{metric_dir}/{dataset}.json") as file:
             json.dump({dataset: tst_metric}, file, indent=4)
 
@@ -134,6 +134,7 @@ def beir_inference(output_dir:str, input_args:argparse.ArgumentParser):
 
     with open(f"{metric_dir}/beir.json") as file:
         json.dump(beir_metrics, file, indent=4)
+
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
@@ -146,7 +147,7 @@ if __name__ == '__main__':
     mname = "distilbert-base-uncased"
 
     if input_args.beir_mode:
-        beir_inference(output_dir, input_args)
+        beir_inference(output_dir, input_args, mname)
     else:
         config_file = (
             "configs/msmarco/data-ngame-gpt-substring_lbl_ce-negatives-topk-05-linker_exact.json"
@@ -154,5 +155,5 @@ if __name__ == '__main__':
             "configs/msmarco/data-ngame-gpt-substring_lbl.json"
         )
         train_dset, test_dset = load_block("msmarco", config_file, input_args)
-        run(output_dir, input_args, test_dset, train_dset)
+        run(output_dir, input_args, mname, test_dset, train_dset)
 
