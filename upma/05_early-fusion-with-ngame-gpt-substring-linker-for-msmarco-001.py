@@ -126,6 +126,7 @@ def beir_inference(output_dir:str, input_args:argparse.ArgumentParser, mname:str
         data_info = load_info(save_file, meta_file, mname, sequence_length=128)
         test_dset = SXCDataset(SMainXCDataset(data_info=data_info, data_lbl=test_dset.data.data_lbl, lbl_info=test_dset.data.lbl_info))
 
+        input_args.prediction_suffix = dataset
         trn_repr, tst_repr, lbl_repr, trn_pred, tst_pred, trn_metric, tst_metric = run(output_dir, input_args, mname, test_dset, train_dset)
         with open(f"{metric_dir}/{dataset}.json", "w") as file:
             json.dump({dataset: tst_metric}, file, indent=4)
