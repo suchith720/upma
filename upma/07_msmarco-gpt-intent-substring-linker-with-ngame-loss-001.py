@@ -7,7 +7,8 @@ __all__ = []
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = "2,3"
 
-import argparse
+import argparse, json
+from tqdm.auto import tqdm
 
 from xcai.misc import *
 from xcai.main import *
@@ -43,7 +44,7 @@ def beir_inference(output_dir:str, input_args:argparse.ArgumentParser, mname:str
         dataset = dataset.replace("/", "-")
 
         input_args.prediction_suffix = dataset
-        trn_repr, tst_repr, lbl_repr, trn_pred, tst_pred, trn_metric, tst_metric = run(output_dir, input_args, mname, test_dset)
+        trn_repr, tst_repr, lbl_repr, trn_pred, tst_pred, trn_metric, tst_metric = linker_run(output_dir, input_args, mname, test_dset)
 
         with open(f"{metric_dir}/{dataset}.json", "w") as file:
             json.dump({dataset: tst_metric}, file, indent=4)

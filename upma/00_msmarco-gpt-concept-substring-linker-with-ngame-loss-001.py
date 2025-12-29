@@ -5,7 +5,7 @@ __all__ = []
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 3
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = "0,1"
+os.environ['CUDA_VISIBLE_DEVICES'] = "4,5"
 
 import torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
 
@@ -19,6 +19,7 @@ def additional_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--pct', type=float, default=1.0)
     parser.add_argument('--use_all', action="store_true")
+    parser.add_argument('--lbl_sim', action="store_true")
     return parser.parse_known_args()[0]
 
 def get_random_idx(n_data:int, pct:float):
@@ -36,10 +37,10 @@ if __name__ == '__main__':
     input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
 
     if extra_args.use_all:
-        config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-all-concept-substring.json"
-    else:
-        config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-concept-substring.json"
+        config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-all-substring.json"
         assert input_args.do_test_inference, f"All concept substrings should be used in inference mode"
+    else:
+        config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-substring.json"
 
     config_key, fname = get_config_key(config_file)
 
@@ -133,6 +134,12 @@ if __name__ == '__main__':
         data_collator=block.collator,
         compute_metrics=metric,
     )
+
+    eval_dataset = None
+    if extra_args.lbl_sim:
+        lbl_info = test_dset.data.lbl_info
+        eval_dataset = SXCDataset(SMainXCDataset(data_info=lbl_info, lbl_info=lbl_info))
+        input_args.prediction_suffix = "labels" 
     
-    main(learn, input_args, n_lbl=test_dset.data.n_lbl, eval_k=10, train_k=10)
+    main(learn, input_args, n_lbl=test_dset.data.n_lbl, eval_dataset=eval_dataset, eval_k=10, train_k=10)
     
