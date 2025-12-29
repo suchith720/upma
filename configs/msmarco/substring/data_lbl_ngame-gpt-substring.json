@@ -8,7 +8,7 @@
                 "lnk_meta": {
                     "prefix": "lnk",
                     "data_meta": "/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/predictions/train_predictions.npz",
-                    "meta_info": "/data/datasets/beir/msmarco/XC/concept_substrings/raw_data/concept-substring.raw.csv"
+                    "meta_info": "/data/datasets/beir/msmarco/XC/substring/raw_data/substring.raw.csv"
                 }
             },
             "test": {
@@ -17,7 +17,7 @@
                 "lnk_meta": {
                     "prefix": "lnk",
                     "data_meta": "/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/predictions/test_predictions.npz",
-                    "meta_info": "/data/datasets/beir/msmarco/XC/concept_substrings/raw_data/concept-substring.raw.csv"
+                    "meta_info": "/data/datasets/beir/msmarco/XC/substring/raw_data/substring.raw.csv"
                 }
             }
         },

@@ -2,28 +2,28 @@
     "data_lbl_ngame-gpt-substring_ce-negatives-topk-05-linker_exact": {
         "path": {
             "train": {
-                "data_lbl": "/data/datasets/beir/msmarco/XC//trn_X_Y_ce-exact.npz",
-                "data_info": "/data/datasets/beir/msmarco/XC//raw_data/train.raw.txt",
-                "lbl_info": "/data/datasets/beir/msmarco/XC//raw_data/label_exact.raw.txt",
+                "data_lbl": "/data/datasets/beir/msmarco/XC/trn_X_Y_ce-exact.npz",
+                "data_info": "/data/datasets/beir/msmarco/XC/raw_data/train.raw.txt",
+                "lbl_info": "/data/datasets/beir/msmarco/XC/raw_data/label_exact.raw.txt",
                 "neg_meta": {
                     "prefix": "neg",
                     "data_meta": "/data/datasets/beir/msmarco/XC/ce-negatives-topk-05_trn_X_Y.npz",
-                    "meta_info": "/data/datasets/beir/msmarco/XC//raw_data/ce-scores.raw.txt"
+                    "meta_info": "/data/datasets/beir/msmarco/XC/raw_data/ce-scores.raw.txt"
                 },
                 "lnk_meta": {
                     "prefix": "lnk",
                     "data_meta": "/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/predictions/train_predictions.npz",
-                    "meta_info": "/data/datasets/beir/msmarco/XC/concept_substrings/raw_data/concept-substring.raw.csv"
+                    "meta_info": "/data/datasets/beir/msmarco/XC/substring/raw_data/substring.raw.csv"
                 }
             },
             "test": {
-                "data_lbl": "/data/datasets/beir/msmarco/XC//tst_X_Y_exact.npz",
-                "data_info": "/data/datasets/beir/msmarco/XC//raw_data/test.raw.txt",
-                "lbl_info": "/data/datasets/beir/msmarco/XC//raw_data/label_exact.raw.txt",
+                "data_lbl": "/data/datasets/beir/msmarco/XC/tst_X_Y_exact.npz",
+                "data_info": "/data/datasets/beir/msmarco/XC/raw_data/test.raw.txt",
+                "lbl_info": "/data/datasets/beir/msmarco/XC/raw_data/label_exact.raw.txt",
                 "lnk_meta": {
                     "prefix": "lnk",
                     "data_meta": "/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/predictions/test_predictions.npz",
-                    "meta_info": "/data/datasets/beir/msmarco/XC/concept_substrings/raw_data/concept-substring.raw.csv"
+                    "meta_info": "/data/datasets/beir/msmarco/XC/substring/raw_data/substring.raw.csv"
                 }
             }
         },
