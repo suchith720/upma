@@ -8,6 +8,8 @@ import os
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1"
 
 import torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
+from typing import Optional, Union, Callable
+from tqdm.auto import tqdm
 
 from xcai.basics import *
 from xcai.models.PPP0XX import DBT009, DBTConfig
@@ -15,53 +17,45 @@ from xcai.models.PPP0XX import DBT009, DBTConfig
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 5
 os.environ['WANDB_PROJECT'] = "01_upma-msmarco-gpt-concept-substring-linker"
 
+
 def additional_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--pct', type=float, default=1.0)
-    parser.add_argument('--use_all', action="store_true")
+    parser.add_argument("--pct", type=float, default=1.0)
+    parser.add_argument("--use_all", action="store_true")
+    parser.add_argument("--use_training_test_set", action="store_true")
     return parser.parse_known_args()[0]
+
 
 def get_random_idx(n_data:int, pct:float):
     n_trn = int(pct * n_data)
     return np.random.permutation(n_data)[:n_trn]
 
-# %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
-if __name__ == '__main__':
-    output_dir = "/home/aiscuser/scratch1/outputs/upma/06_msmarco-gpt-narrow-substring-linker-with-ngame-loss-001"
 
-    input_args = parse_args()
-    extra_args = additional_args()
-
-    input_args.use_sxc_sampler = True
-    input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
-
-    if extra_args.use_all:
-        config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-all-narrow-substring.json"
-        assert input_args.do_test_inference, f"All substrings should be used in inference mode"
-    else:
-        config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-narrow-substring.json"
-
+def load_block(dataset:str, config_file:str, input_args:argparse.ArgumentParser, extra_args:Optional[argparse.ArgumentParser]=None):
     config_key, fname = get_config_key(config_file)
-
-    mname = "sentence-transformers/msmarco-distilbert-cos-v5"
-
-    pkl_file = get_pkl_file(input_args.pickle_dir, f"msmarco_{fname}_distilbert-base-uncased", input_args.use_sxc_sampler, 
+    pkl_file = get_pkl_file(input_args.pickle_dir, f"{dataset}_{fname}_distilbert-base-uncased", input_args.use_sxc_sampler, 
                             input_args.exact, input_args.only_test)
-
-    do_inference = check_inference_mode(input_args)
 
     os.makedirs(os.path.dirname(pkl_file), exist_ok=True)
     block = build_block(pkl_file, config_file, input_args.use_sxc_sampler, config_key, do_build=input_args.build_block, only_test=input_args.only_test, 
                         n_slbl_samples=1, main_oversample=False)
 
+    do_inference = check_inference_mode(input_args)
     if do_inference: 
-        train_dset, test_dset = None if block.train is None else block.train.dset, block.test.dset
+        train_dset = None if block.train is None else block.train.dset 
+        test_dset = block.test.dset.get_valid_dset() if extra_args.use_training_test_set else block.test.dset
     else: 
         train_dset = block.train.dset.get_valid_dset()
         test_dset = block.test.dset.get_valid_dset()
         if extra_args.pct < 1.0: 
             train_dset = train_dset._getitems(get_random_idx(len(train_dset), extra_args.pct))
-    
+
+    return train_dset, test_dset
+
+
+def run(output_dir:str, input_args:argparse.ArgumentParser, mname:str, test_dset:Union[XCDataset, SXCDataset], 
+        train_dset:Optional[Union[XCDataset, SXCDataset]]=None, collator:Optional[Callable]=identity_collate_fn):
+
     args = XCLearningArguments(
         output_dir=output_dir,
         logging_first_step=True,
@@ -119,6 +113,7 @@ if __name__ == '__main__':
     def model_fn(mname, config):
         return DBT009.from_pretrained(mname, config=config)
 
+    do_inference = check_inference_mode(input_args)
     model = load_model(args.output_dir, model_fn, {"mname": mname, "config": config}, do_inference=do_inference, 
                        use_pretrained=input_args.use_pretrained)
 
@@ -130,9 +125,67 @@ if __name__ == '__main__':
         args=args,
         train_dataset=train_dset,
         eval_dataset=test_dset,
-        data_collator=block.collator,
+        data_collator=collator,
         compute_metrics=metric,
     )
     
-    main(learn, input_args, n_lbl=test_dset.data.n_lbl, eval_k=10, train_k=10)
+    return main(learn, input_args, n_lbl=test_dset.data.n_lbl, eval_k=10, train_k=10)
+
+
+def beir_inference(output_dir:str, input_args:argparse.ArgumentParser, mname:str):
+    metric_dir = f"{output_dir}/metrics"
+    os.makedirs(metric_dir, exist_ok=True)
+
+    input_args.only_test = input_args.do_test_inference = input_args.save_test_prediction = True
+
+    # meta-data
+    meta_info = load_info(f"{input_args.pickle_dir}/msmarco-narrow-substring.joblib",
+                          "/data/datasets/beir/msmarco/XC/narrow_substring/raw_data/substring.raw.csv",
+                          mname, sequence_length=64)
+
+    beir_metrics = {}
+    for dataset in tqdm(DATASETS):
+        print(dataset)
+        # test-data
+        test_info = load_info(f"{input_args.pickle_dir}/beir/{input_args.dataset.replace('/', '-')}.joblib",
+                              f"/data/datasets/beir/{input_args.dataset}/XC/raw_data/test.raw.csv",
+                              mname, sequence_length=32)
+
+        # dataset
+        test_dset = SXCDataset(SMainXCDataset(data_info=test_info, lbl_info=meta_info))
+
+        input_args.prediction_suffix = dataset
+        trn_repr, tst_repr, lbl_repr, trn_pred, tst_pred, trn_metric, tst_metric = run(output_dir, input_args, mname, test_dset, train_dset)
+        with open(f"{metric_dir}/{dataset}.json", "w") as file:
+            json.dump({dataset: tst_metric}, file, indent=4)
+
+        beir_metrics[dataset] = tst_metric
+
+    with open(f"{metric_dir}/beir.json", "w") as file:
+        json.dump(beir_metrics, file, indent=4)
+
+
+# %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
+if __name__ == '__main__':
+    output_dir = "/home/aiscuser/scratch1/outputs/upma/06_msmarco-gpt-narrow-substring-linker-with-ngame-loss-001"
+
+    input_args = parse_args()
+    extra_args = additional_args()
+
+    input_args.use_sxc_sampler = True
+    input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
+    mname = "sentence-transformers/msmarco-distilbert-cos-v5"
+
+    if input_args.beir_mode:
+        beir_inference(output_dir, input_args, mname)
+    else:
+        if extra_args.use_all:
+            config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-all-narrow-substring.json"
+            assert input_args.do_test_inference, f"All substrings should be used in inference mode"
+        else:
+            config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-narrow-substring.json"
+        train_dset, test_dset = load_block("msmarco", config_file, input_args, extra_args)
+        run(output_dir, input_args, mname, test_dset, train_dset)
+
+    
     
