@@ -5,7 +5,7 @@ __all__ = []
 
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 2
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "4,5,6,7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 
 import torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp
 
@@ -20,7 +20,7 @@ os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
 
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 21
 if __name__ == '__main__':
-    output_dir = "/data/outputs/upma/03_upma-with-ngame-gpt-substring-linker-for-msmarco-002"
+    output_dir = "/home/aiscuser/scratch1/outputs/upma/03_upma-with-ngame-gpt-substring-linker-for-msmarco-002"
 
     input_args = parse_args()
     input_args.use_sxc_sampler = True
@@ -30,9 +30,9 @@ if __name__ == '__main__':
     do_inference = check_inference_mode(input_args)
 
     if input_args.exact:
-        config_file = "configs/msmarco/data_lbl_ngame-gpt-substring_ce-negatives-topk-05-linker_exact.json"
+        config_file = "configs/msmarco/substring/data_lbl_ngame-gpt-substring_ce-negatives-topk-05-linker_exact.json"
     else:
-        config_file = "configs/msmarco/data_lbl_ngame-gpt-substring.json" 
+        config_file = "configs/msmarco/substring/data_lbl_ngame-gpt-substring.json" 
 
     config_key, fname = get_config_key(config_file)
 

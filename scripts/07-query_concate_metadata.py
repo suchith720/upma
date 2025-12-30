@@ -43,10 +43,16 @@ DATASETS = [
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
-    output_dir = "/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/"
+    # output_dir = "/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/"
+    # info_file = "/data/datasets/beir/msmarco/XC/substring/raw_data/substring.raw.csv"
+
+    # output_dir = "/data/outputs/upma/06_msmarco-gpt-narrow-substring-linker-with-ngame-loss-001/"
+    # info_file = "/data/datasets/beir/msmarco/XC/narrow_substring/raw_data/substring.raw.csv"
+
+    output_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-001/"
+    info_file = "/data/datasets/beir/msmarco/XC/intent_substring/raw_data/intent.raw.csv"
 
     # Metadata information
-    info_file = "/data/datasets/beir/msmarco/XC/concept_substrings/raw_data/concept-substring.raw.csv"
     meta_info = Info.from_txt(info_file, info_column_names=["identifier", "input_text"])
 
     os.makedirs(f"{output_dir}/raw_data", exist_ok=True)
@@ -59,7 +65,8 @@ if __name__ == '__main__':
         # Metadata predictions
         dataset = dataset.replace("/", "-")
         meta_file = f"{output_dir}/predictions/{dset_type}_predictions"
-        meta_file = f"{meta_file}.npz" if dataset == "msmarco" else f"{meta_file}_{dataset}.npz"
+        # meta_file = f"{meta_file}.npz" if dataset == "msmarco" else f"{meta_file}_{dataset}.npz"
+        meta_file = f"{meta_file}_{dataset}.npz"
         data_meta = retain_topk(sp.load_npz(meta_file), k=5)
         data_text = [txt+" [SEP] "+" [SEP] ".join(meta_info["input_text"][i] for i in row.indices) for txt,row in zip(data_info["input_text"],data_meta)]
 
