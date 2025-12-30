@@ -17,43 +17,6 @@ from xcai.basics import *
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 5
 os.environ['WANDB_PROJECT'] = "01_upma-msmarco-gpt-concept-substring-linker"
 
-def beir_inference(output_dir:str, input_args:argparse.ArgumentParser, mname:str):
-    metric_dir = f"{output_dir}/metrics"
-    os.makedirs(metric_dir, exist_ok=True)
-
-    input_args.only_test = input_args.do_test_inference = input_args.save_test_prediction = True
-
-    # meta-data
-    meta_info = load_info(f"{input_args.pickle_dir}/msmarco-intent-substring.joblib",
-                          "/data/datasets/beir/msmarco/XC/intent_substring/raw_data/substring.raw.csv",
-                          mname, sequence_length=64)
-
-    os.makedirs(f"{input_args.pickle_dir}/beir/", exist_ok=True)
-
-    beir_metrics = {}
-    for dataset in tqdm(DATASETS):
-        print(dataset)
-        # test-data
-        test_info = load_info(f"{input_args.pickle_dir}/beir/{dataset.replace('/', '-')}.joblib",
-                              f"/data/datasets/beir/{dataset}/XC/raw_data/test.raw.csv",
-                              mname, sequence_length=32)
-
-        # dataset
-        test_dset = SXCDataset(SMainXCDataset(data_info=test_info, lbl_info=meta_info))
-
-        dataset = dataset.replace("/", "-")
-
-        input_args.prediction_suffix = dataset
-        trn_repr, tst_repr, lbl_repr, trn_pred, tst_pred, trn_metric, tst_metric = linker_run(output_dir, input_args, mname, test_dset)
-
-        with open(f"{metric_dir}/{dataset}.json", "w") as file:
-            json.dump({dataset: tst_metric}, file, indent=4)
-
-        beir_metrics[dataset] = tst_metric
-
-    with open(f"{metric_dir}/beir.json", "w") as file:
-        json.dump(beir_metrics, file, indent=4)
-
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
     output_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-001"
@@ -66,7 +29,8 @@ if __name__ == '__main__':
     mname = "sentence-transformers/msmarco-distilbert-cos-v5"
 
     if input_args.beir_mode:
-        beir_inference(output_dir, input_args, mname)
+        meta_file = "/data/datasets/beir/msmarco/XC/intent_substring/raw_data/intent.raw.csv"
+        linker_beir_inference(output_dir, input_args, mname, "msmarco-intent-substring", meta_file)
     else:
         if extra_args.use_all:
             config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-all-intent-substring.json"

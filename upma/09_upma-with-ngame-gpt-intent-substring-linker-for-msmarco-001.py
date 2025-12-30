@@ -26,7 +26,7 @@ if __name__ == '__main__':
     mname = "distilbert-base-uncased"
 
     if input_args.beir_mode:
-        meta_file = "/data/datasets/beir/msmarco/XC/intent_substring/raw_data/substring.raw.csv"
+        meta_file = "/data/datasets/beir/msmarco/XC/intent_substring/raw_data/intent.raw.csv"
         upma_beir_inference(output_dir, input_args, mname, "msmarco-intent-substring", meta_file, 
                             "07_msmarco-gpt-intent-substring-linker-with-ngame-loss-001")
     else:
@@ -36,5 +36,5 @@ if __name__ == '__main__':
             "configs/msmarco/intent_substring/data_lbl_ngame-gpt-intent-substring.json"
         )
         train_dset, test_dset = load_upma_block("msmarco", config_file, input_args)
-        upma_run(output_dir, input_args, mname, test_dset, train_dset)
+        upma_run(output_dir, input_args, mname, test_dset, train_dset, train_batch_size=64)
 
