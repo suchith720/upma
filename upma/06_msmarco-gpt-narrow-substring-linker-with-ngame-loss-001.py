@@ -19,22 +19,6 @@ from xcai.models.PPP0XX import DBT009, DBTConfig
 os.environ['WANDB_PROJECT'] = "01_upma-msmarco-gpt-concept-substring-linker"
 
 
-DATASETS = [
-    "cqadupstack/android",
-    "cqadupstack/english",
-    "cqadupstack/gaming",
-    "cqadupstack/gis",
-    "cqadupstack/mathematica",
-    "cqadupstack/physics",
-    "cqadupstack/programmers",
-    "cqadupstack/stats",
-    "cqadupstack/tex",
-    "cqadupstack/unix",
-    "cqadupstack/webmasters",
-    "cqadupstack/wordpress"
-]
-
-
 def additional_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--pct", type=float, default=1.0)
@@ -189,7 +173,7 @@ def beir_inference(output_dir:str, input_args:argparse.ArgumentParser, mname:str
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
-    output_dir = "/home/aiscuser/scratch1/outputs/upma/06_msmarco-gpt-narrow-substring-linker-with-ngame-loss-001"
+    output_dir = "/data/outputs/upma/06_msmarco-gpt-narrow-substring-linker-with-ngame-loss-001"
 
     input_args = parse_args()
     extra_args = additional_args()
