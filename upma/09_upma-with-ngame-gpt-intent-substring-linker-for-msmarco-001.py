@@ -28,7 +28,7 @@ if __name__ == '__main__':
     if input_args.beir_mode:
         meta_file = "/data/datasets/beir/msmarco/XC/intent_substring/raw_data/intent.raw.csv"
         upma_beir_inference(output_dir, input_args, mname, "msmarco-intent-substring", meta_file, 
-                            "07_msmarco-gpt-intent-substring-linker-with-ngame-loss-001")
+                            "07_msmarco-gpt-intent-substring-linker-with-ngame-loss-001", eval_batch_size=200)
     else:
         config_file = (
             "configs/msmarco/intent_substring/data_lbl_ngame-gpt-intent-substring_ce-negatives-topk-05-linker_exact.json"
