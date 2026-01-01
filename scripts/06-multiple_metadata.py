@@ -9,64 +9,65 @@ from tqdm.auto import tqdm
 
 from xcai.basics import *
 from xcai.analysis import *
+from xcai.misc import *
 
-DATASETS = [
-    "arguana",
-    "msmarco",
-    "climate-fever",
-    "dbpedia-entity",
-    "fever",
-    "fiqa",
-    "hotpotqa",
-    "nfcorpus",
-    "nq",
-    "quora",
-    "scidocs",
-    "scifact",
-    "webis-touche2020",
-    "trec-covid",
-    "cqadupstack/android",
-    "cqadupstack/english",
-    "cqadupstack/gaming",
-    "cqadupstack/gis",
-    "cqadupstack/mathematica",
-    "cqadupstack/physics",
-    "cqadupstack/programmers",
-    "cqadupstack/stats",
-    "cqadupstack/tex",
-    "cqadupstack/unix",
-    "cqadupstack/webmasters",
-    "cqadupstack/wordpress"
-]
+import xclib.evaluation.xc_metrics as xm
+
 
 def additional_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_examples', type=int, default=20)
     return parser.parse_known_args()[0]
 
+
+def _ndcg(eval_flags, n, k=5):
+    _cumsum = 0
+    _dcg = np.cumsum(np.multiply(
+        eval_flags, 1/np.log2(np.arange(k)+2)),
+        axis=-1)
+    ndcg = []
+    for _k in range(k):
+        _cumsum += 1/np.log2(_k+1+1)
+        ndcg.append(np.multiply(_dcg[:, _k].reshape(-1, 1), 1/np.minimum(n, _cumsum)))
+    return np.hstack(ndcg)
+
+
+def ndcg(X, true_labels, k=5, sorted=False, use_cython=False):
+    indices, true_labels, _, _ = xm._setup_metric(
+        X, true_labels, k=k, sorted=sorted, use_cython=use_cython)
+    eval_flags = xm._eval_flags(indices, true_labels, None)
+    _total_pos = np.asarray(
+        true_labels.sum(axis=1),
+        dtype=np.int32)
+    _max_pos = max(np.max(_total_pos), k)
+    _cumsum = np.cumsum(1/np.log2(np.arange(1, _max_pos+1)+1))
+    n = _cumsum[_total_pos - 1]
+    return _ndcg(eval_flags, n, k)
+
+
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
     output_dir = "/home/aiscuser/scratch1/examples/"
 
     pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
-    mname = "distilbert-base-uncased"
-
     extra_args = additional_args()
 
     # Metadata information
-    info_file = "/data/datasets/beir/msmarco/XC/concept_substrings/raw_data/concept-substring.raw.csv"
-    sub_info = Info.from_txt(info_file, info_column_names=["identifier", "input_text"])
-    sub_dir = "/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/predictions/"
+    info_file = "/data/datasets/beir/msmarco/XC/substring/raw_data/substring.raw.csv"
+    sub_dict = {
+        "info": Info.from_txt(info_file, info_column_names=["identifier", "input_text"]),
+        "linker_dir": "/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/predictions/",
+        "output_dir": "/data/outputs/upma/03_upma-with-ngame-gpt-substring-linker-for-msmarco-002/predictions/",
+    }
 
-    sub_output_dir = "/data/outputs/upma/03_upma-with-ngame-gpt-substring-linker-for-msmarco-002/predictions/"
+    info_file = "/data/datasets/beir/msmarco/XC/raw_data/category-gpt-linker_conflated-001_conflated-001.raw.csv"
+    cat_dict = {
+        "info": Info.from_txt(info_file, info_column_names=["identifier", "input_text"]),
+        "linker_dir": "/data/outputs/mogicX/47_msmarco-gpt-category-linker-008/predictions/",
+        "output_dir": "/data/outputs/upma/04_upma-with-ngame-gpt-category-linker-for-msmarco-001/predictions/",
+    }
 
-    info_file = "/data/datasets/beir/msmarco/XC/raw_data/category-gpt_conflated.raw.csv"
-    cat_info = Info.from_txt(info_file, info_column_names=["identifier", "input_text"])
-    cat_dir = "/data/outputs/mogicX/47_msmarco-gpt-category-linker-002/predictions/"
-
-    cat_output_dir = "/data/outputs/mogicX/50_distilbert-ngame-category-linker-oracle-for-msmarco-002/predictions/47_msmarco-gpt-category-linker-002/"
-
-    for dataset in tqdm(DATASETS):
+    for dataset in tqdm(BEIR_DATASETS):
         # basic dataset
         config_file = f"/data/datasets/beir/{dataset}/XC/configs/data.json"
         config_key, fname = get_config_key(config_file)
@@ -77,21 +78,19 @@ if __name__ == '__main__':
                             return_scores=True, n_slbl_samples=1)
 
         # Metadata predictions
-        data_sub = sp.load_npz(f"{sub_dir}/test_predictions_{dataset}.npz")
-        data_cat = sp.load_npz(f"{cat_dir}/test_predictions_{dataset}.npz")
+        data_sub = sp.load_npz(f"{sub_dict['linker_dir']}/test_predictions_{dataset}.npz")
+        data_cat = sp.load_npz(f"{cat_dict['linker_dir']}/test_predictions_{dataset}.npz")
 
         # Label predictions
-        data_lbl_sub = sp.load_npz(f"{sub_output_dir}/test_predictions_{dataset}.npz")
-        data_lbl_cat = sp.load_npz(f"{cat_output_dir}/test_predictions_{dataset}.npz")
+        data_lbl_sub = sp.load_npz(f"{sub_dict['output_dir']}/test_predictions_{dataset}.npz")
+        data_lbl_cat = sp.load_npz(f"{cat_dict['output_dir']}/test_predictions_{dataset}.npz")
 
         assert data_sub.shape[0] == data_cat.shape[0]
         assert data_lbl_sub.shape == data_lbl_cat.shape
 
         # Prediction scores
-        sub_scores = pointwise_eval(data_lbl_sub, block.test.dset.data.data_lbl, topk=5, metric="P")
-        sub_scores = np.array(sub_scores.sum(axis=1)).flatten().tolist()
-        cat_scores = pointwise_eval(data_lbl_cat, block.test.dset.data.data_lbl, topk=5, metric="P")
-        cat_scores = np.array(cat_scores.sum(axis=1)).flatten().tolist()
+        sub_scores = ndcg(data_lbl_sub, block.test.dset.data.data_lbl, k=10)[:, -1]
+        cat_scores = ndcg(data_lbl_cat, block.test.dset.data.data_lbl, k=10)[:, -1]
 
         # Dataset
         meta_kwargs = {
@@ -103,16 +102,15 @@ if __name__ == '__main__':
         # Display predictions
         example_dir = f"{output_dir}/examples"
         os.makedirs(example_dir, exist_ok=True)
-        disp_block = TextDataset(test_dset, pattern=".*(_text|_scores)$", combine_info=True, sort_by="scores")
 
         np.random.seed(1000)
         idxs = np.random.permutation(data_sub.shape[0])[:extra_args.num_examples]
+
+        disp_block = TextDataset(test_dset, pattern=".*(_text|_scores)$", combine_info=True, sort_by="scores")
 
         items = [disp_block.combine_by_prefix(disp_block[idx]) if disp_block.combine_info else disp_block[idx] for idx in idxs]
         for idx, item in zip(idxs, items): item.update({"data_substring_metric":sub_scores[idx], "data_category_metric":cat_scores[idx]})
 
         with open(f"{example_dir}/test_examples_{dataset}.json", 'w') as file:
             json.dump(items, file, indent=4)
-
-        break
 

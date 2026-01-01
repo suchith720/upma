@@ -5,7 +5,7 @@ __all__ = []
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 3
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = "0,1"
+os.environ['CUDA_VISIBLE_DEVICES'] = "2,3"
 
 import torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
 
@@ -19,19 +19,19 @@ os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
 if __name__ == '__main__':
     input_args = parse_args()
 
-    output_dir = "/data/outputs/upma/10_early-fusion-with-ngame-gpt-narrow-substring-linker-for-msmarco-001"
+    output_dir = "/data/outputs/upma/11_early-fusion-with-ngame-gpt-intent-substring-linker-for-msmarco-001"
 
     input_args.use_sxc_sampler = True
     input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
     mname = "distilbert-base-uncased"
 
     if input_args.beir_mode:
-        early_fusion_beir_inference(output_dir, input_args, mname, "06_msmarco-gpt-narrow-substring-linker-with-ngame-loss-001")
+        early_fusion_beir_inference(output_dir, input_args, mname, "07_msmarco-gpt-intent-substring-linker-with-ngame-loss-001")
     else:
         config_file = (
-            "configs/msmarco/narrow_substring/data-ngame-gpt-narrow-substring_lbl_ce-negatives-topk-05-linker_exact.json"
+            "configs/msmarco/intent_substring/data-ngame-gpt-intent-substring_lbl_ce-negatives-topk-05-linker_exact.json"
             if input_args.exact else
-            "configs/msmarco/narrow_substring/data-ngame-gpt-narrow-substring_lbl.json"
+            "configs/msmarco/intent_substring/data-ngame-gpt-intent-substring_lbl.json"
         )
         train_dset, test_dset = load_early_fusion_block("msmarco", config_file, input_args)
         early_fusion_run(output_dir, input_args, mname, test_dset, train_dset)

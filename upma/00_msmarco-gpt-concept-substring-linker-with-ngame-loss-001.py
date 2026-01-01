@@ -5,7 +5,7 @@ __all__ = []
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 3
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = "4,5"
+os.environ['CUDA_VISIBLE_DEVICES'] = "0,1"
 
 import torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
 
@@ -20,6 +20,7 @@ def additional_args():
     parser.add_argument('--pct', type=float, default=1.0)
     parser.add_argument('--use_all', action="store_true")
     parser.add_argument('--lbl_sim', action="store_true")
+    parser.add_argument('--use_train_test_set', action="store_true")
     return parser.parse_known_args()[0]
 
 def get_random_idx(n_data:int, pct:float):
@@ -55,7 +56,7 @@ if __name__ == '__main__':
     block = build_block(pkl_file, config_file, input_args.use_sxc_sampler, config_key, do_build=input_args.build_block, only_test=input_args.only_test, 
                         n_slbl_samples=1, main_oversample=False)
 
-    if do_inference: 
+    if do_inference and not extra_args.use_train_test_set: 
         train_dset, test_dset = None if block.train is None else block.train.dset, block.test.dset
     else: 
         train_dset = block.train.dset.get_valid_dset()
