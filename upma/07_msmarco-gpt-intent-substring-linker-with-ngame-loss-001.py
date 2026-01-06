@@ -29,8 +29,12 @@ if __name__ == '__main__':
     mname = "sentence-transformers/msmarco-distilbert-cos-v5"
 
     if input_args.beir_mode:
-        meta_file = "/data/datasets/beir/msmarco/XC/intent_substring/raw_data/intent.raw.csv"
-        linker_beir_inference(output_dir, input_args, mname, "msmarco-intent-substring", meta_file)
+        meta_dir = "/data/datasets/beir/msmarco/XC/intent_substring/raw_data/"
+        meta_file = f"{meta_dir}/all-intent.raw.csv" if extra_args.use_all else f"{meta_dir}/intent.raw.csv"
+        save_file_name = "msmarco-all-intent-substring" if extra_args.use_all else "msmarco-intent-substring" 
+        pred_dir_name = "all-predictions" if extra_args.use_all else "predictions"
+
+        linker_beir_inference(output_dir, input_args, mname, save_file_name, meta_file, pred_dir_name=pred_dir_name)
     else:
         if extra_args.use_all:
             config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-all-intent-substring.json"

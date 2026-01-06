@@ -5,20 +5,49 @@ __all__ = []
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 3
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = "0,1"
+# os.environ['CUDA_VISIBLE_DEVICES'] = "0,1"
 
 import torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
 from typing import Optional, Union, Callable
 from tqdm.auto import tqdm
 
 from xcai.basics import *
+from xcai.misc import *
 from xcai.models.PPP0XX import DBT023, DBTConfig
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 5
 os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
 
+DATASETS = [
+    # "arguana",
+    # "msmarco",
+    # "climate-fever",
+    # "dbpedia-entity",
+    # "fever",
+    # "fiqa",
+    # "hotpotqa",
+    # "nfcorpus",
+    # "nq",
+    # "quora",
+    # "scidocs",
+    # "scifact",
+    # "webis-touche2020",
+    # "trec-covid",
+    # "cqadupstack/android",
+    # "cqadupstack/english",
+    # "cqadupstack/gaming",
+    # "cqadupstack/gis",
+    # "cqadupstack/mathematica",
+    # "cqadupstack/physics",
+    # "cqadupstack/programmers",
+    # "cqadupstack/stats",
+    # "cqadupstack/tex",
+    # "cqadupstack/unix",
+    # "cqadupstack/webmasters",
+    # "cqadupstack/wordpress"
+]
 
-def run(output_dir:str, input_args:argparse.ArgumentParser, mname:str, test_dset:Union[XCDataset, SXCDataset], 
+def run(output_dir:str, input_args:argparse.ArgumentParser, extra_args:argparse.ArgumentParser, mname:str, test_dset:Union[XCDataset, SXCDataset], 
         train_dset:Optional[Union[XCDataset, SXCDataset]]=None, collator:Optional[Callable]=identity_collate_fn):
 
     args = XCLearningArguments(
@@ -90,7 +119,8 @@ def run(output_dir:str, input_args:argparse.ArgumentParser, mname:str, test_dset
         compute_metrics=metric,
     )
     
-    return main(learn, input_args, n_lbl=test_dset.data.n_lbl, eval_k=10, train_k=10)
+    save_dir_name = f"predictions_document-substring_sq-substring" if extra_args.use_task_specific_metadata else None
+    return main(learn, input_args, n_lbl=test_dset.data.n_lbl, eval_k=10, train_k=10, save_dir_name=save_dir_name)
 
 
 def load_block(dataset:str, config_file:str, input_args:argparse.ArgumentParser):
@@ -107,13 +137,12 @@ def load_block(dataset:str, config_file:str, input_args:argparse.ArgumentParser)
     return train_dset, test_dset 
 
 
-def beir_inference(output_dir:str, input_args:argparse.ArgumentParser, mname:str):
-    metric_dir = f"{output_dir}/metrics"
+def beir_inference(output_dir:str, input_args:argparse.ArgumentParser, extra_args:argparse.ArgumentParser, mname:str):
+    metric_dir = f"{output_dir}/metrics_document-substring_sq-substring" if extra_args.use_task_specific_metadata else f"{output_dir}/metrics"
     os.makedirs(metric_dir, exist_ok=True)
 
     input_args.only_test = input_args.do_test_inference = input_args.save_test_prediction = True
 
-    beir_metrics = {}
     for dataset in tqdm(DATASETS):
         print(dataset)
 
@@ -121,17 +150,33 @@ def beir_inference(output_dir:str, input_args:argparse.ArgumentParser, mname:str
         train_dset, test_dset = load_block(dataset, config_file, input_args)
 
         dataset = dataset.replace("/", "-")
-        save_file = f"{input_args.pickle_dir}/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/{dataset}.joblib"
-        meta_file = f"/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/raw_data/test_{dataset}.raw.csv"
+        linker_dir = "00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001"
+
+        if extra_args.use_task_specific_metadata:
+            save_file = f"{input_args.pickle_dir}/{linker_dir}/{dataset}_document-substring_sq-substring.joblib"
+            meta_file = f"/data/outputs/upma/{linker_dir}/raw_data_document-substring_sq-substring/test_{dataset}.raw.csv"
+        else:
+            save_file = f"{input_args.pickle_dir}/{linker_dir}/{dataset}.joblib"
+            meta_file = f"/data/outputs/upma/{linker_dir}/raw_data/test_{dataset}.raw.csv"
+        
+        if not os.path.exists(meta_file):
+            continue
+
         data_info = load_info(save_file, meta_file, mname, sequence_length=128)
         test_dset = SXCDataset(SMainXCDataset(data_info=data_info, data_lbl=test_dset.data.data_lbl, lbl_info=test_dset.data.lbl_info))
 
         input_args.prediction_suffix = dataset
-        trn_repr, tst_repr, lbl_repr, trn_pred, tst_pred, trn_metric, tst_metric = run(output_dir, input_args, mname, test_dset, train_dset)
+        trn_repr, tst_repr, lbl_repr, trn_pred, tst_pred, trn_metric, tst_metric = run(output_dir, input_args, extra_args, mname, test_dset, train_dset)
+
         with open(f"{metric_dir}/{dataset}.json", "w") as file:
             json.dump({dataset: tst_metric}, file, indent=4)
 
-        beir_metrics[dataset] = tst_metric
+    beir_metrics = {}
+    for dataset in tqdm(BEIR_DATASETS):
+        fname = f"{metric_dir}/{dataset.replace('/', '-')}.json"
+        if os.path.exists(fname):
+            with open(fname) as file:
+                beir_metrics.update(json.load(file))
 
     with open(f"{metric_dir}/beir.json", "w") as file:
         json.dump(beir_metrics, file, indent=4)
@@ -140,6 +185,7 @@ def beir_inference(output_dir:str, input_args:argparse.ArgumentParser, mname:str
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
     input_args = parse_args()
+    extra_args = additional_args()
 
     output_dir = "/data/outputs/upma/05_early-fusion-with-ngame-gpt-substring-linker-for-msmarco-001"
 
@@ -148,7 +194,7 @@ if __name__ == '__main__':
     mname = "distilbert-base-uncased"
 
     if input_args.beir_mode:
-        beir_inference(output_dir, input_args, mname)
+        beir_inference(output_dir, input_args, extra_args, mname)
     else:
         config_file = (
             "configs/msmarco/data-ngame-gpt-substring_lbl_ce-negatives-topk-05-linker_exact.json"
@@ -156,5 +202,5 @@ if __name__ == '__main__':
             "configs/msmarco/data-ngame-gpt-substring_lbl.json"
         )
         train_dset, test_dset = load_block("msmarco", config_file, input_args)
-        run(output_dir, input_args, mname, test_dset, train_dset)
+        run(output_dir, input_args, extra_args, mname, test_dset, train_dset)
 

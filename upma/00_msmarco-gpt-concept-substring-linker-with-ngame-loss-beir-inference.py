@@ -7,6 +7,7 @@ __all__ = []
 import os, torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
 
 from xcai.basics import *
+from xcai.misc import *
 from xcai.models.PPP0XX import DBT009, DBTConfig
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
@@ -23,16 +24,22 @@ if __name__ == '__main__':
 
     mname = "sentence-transformers/msmarco-distilbert-cos-v5"
     do_inference = check_inference_mode(input_args)
+    dataset_prefix = input_args.dataset.replace("/", "-")
 
     # test-data
-    test_info = load_info(f"{input_args.pickle_dir}/beir/{input_args.dataset.replace('/', '-')}.joblib",
+    test_info = load_info(f"{input_args.pickle_dir}/beir/{dataset_prefix}.joblib",
                           f"/data/datasets/beir/{input_args.dataset}/XC/raw_data/test.raw.csv",
                           mname, sequence_length=32)
 
     # meta-data
-    meta_info = load_info(f"{input_args.pickle_dir}/concept-substring.joblib",
-                          "/data/datasets/beir/msmarco/XC/concept_substrings/raw_data/concept-substring.raw.csv",
-                          mname, sequence_length=64)
+    if extra_args.use_task_specific_metadata:
+        meta_info = load_info(f"{input_args.pickle_dir}/beir/{dataset_prefix}_document-substring_sq-substring.joblib",
+                              f"/data/datasets/beir/{input_args.dataset}/XC/document_substring/raw_data/sq-substring.raw.csv",
+                              mname, sequence_length=64)
+    else:
+        meta_info = load_info(f"{input_args.pickle_dir}/msmarco-substring-metadata.joblib",
+                              "/data/datasets/beir/msmarco/XC/substring/raw_data/substring.raw.csv",
+                              mname, sequence_length=64)
 
     # dataset
     test_dset = SXCDataset(SMainXCDataset(data_info=test_info, lbl_info=meta_info))
@@ -106,5 +113,6 @@ if __name__ == '__main__':
         data_collator=identity_collate_fn,
     )
 
-    main(learn, input_args, n_lbl=test_dset.data.n_lbl, eval_k=10, train_k=10)
+    save_dir_name = "predictions_document-substring_sq-substring" if extra_args.use_task_specific_metadata else None
+    main(learn, input_args, n_lbl=test_dset.data.n_lbl, eval_k=10, train_k=10, save_dir_name=save_dir_name)
 

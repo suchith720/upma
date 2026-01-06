@@ -140,7 +140,8 @@ if __name__ == '__main__':
     if extra_args.lbl_sim:
         lbl_info = test_dset.data.lbl_info
         eval_dataset = SXCDataset(SMainXCDataset(data_info=lbl_info, lbl_info=lbl_info))
-        input_args.prediction_suffix = "labels" 
-    
+        mname = mname.split("/")[1] if "/" in mname else mname
+        input_args.prediction_suffix = f"labels_{mname}" if input_args.use_pretrained else "labels" 
+
     main(learn, input_args, n_lbl=test_dset.data.n_lbl, eval_dataset=eval_dataset, eval_k=10, train_k=10)
     
