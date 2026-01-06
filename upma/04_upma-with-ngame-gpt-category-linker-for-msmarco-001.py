@@ -15,6 +15,7 @@ from transformers import DistilBertConfig
 from xclib.utils.sparse import retain_topk
 
 from xcai.basics import *
+from xcai.misc import *
 from xcai.models.upma import UPA000, UPMAConfig
 
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 4
@@ -157,12 +158,11 @@ def beir_inference(output_dir:str, input_args:argparse.ArgumentParser, mname:str
 
     input_args.only_test = input_args.do_test_inference = input_args.save_test_prediction = True
 
-    save_file = f"{input_args.pickle_dir}/category-gpt-linker_conflated-001_conflated-001.joblib"
-    meta_file = "/data/datasets/beir/msmarco/XC/raw_data/category-gpt-linker_conflated-001_conflated-001.raw.csv"
-    meta_info = load_info(save_file, meta_file, mname, sequence_length=64)
+    meta_info = load_info(f"{input_args.pickle_dir}/category-gpt-linker_conflated-001_conflated-001.joblib", 
+                          "/data/datasets/beir/msmarco/XC/raw_data/category-gpt-linker_conflated-001_conflated-001.raw.csv", 
+                          mname, sequence_length=64)
 
-    beir_metrics = {}
-    for dataset in tqdm(DATASETS):
+    for dataset in tqdm(BEIR_DATASETS):
         print(dataset)
 
         config_file = f"/data/datasets/beir/{dataset}/XC/configs/data.json"
@@ -181,10 +181,7 @@ def beir_inference(output_dir:str, input_args:argparse.ArgumentParser, mname:str
         with open(f"{metric_dir}/{dataset}.json", "w") as file:
             json.dump({dataset: tst_metric}, file, indent=4)
 
-        beir_metrics[dataset] = tst_metric
-
-    with open(f"{metric_dir}/beir.json", "w") as file:
-        json.dump(beir_metrics, file, indent=4)
+    collate_beir_metrics(metric_dir)
 
 
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 21

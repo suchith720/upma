@@ -47,7 +47,7 @@ def ndcg(X, true_labels, k=5, sorted=False, use_cython=False):
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
-    output_dir = "/home/aiscuser/scratch1/examples/"
+    output_dir = "/home/aiscuser/scratch1/category_vs_substring/"
 
     pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
     extra_args = additional_args()
@@ -63,7 +63,7 @@ if __name__ == '__main__':
     info_file = "/data/datasets/beir/msmarco/XC/raw_data/category-gpt-linker_conflated-001_conflated-001.raw.csv"
     cat_dict = {
         "info": Info.from_txt(info_file, info_column_names=["identifier", "input_text"]),
-        "linker_dir": "/data/outputs/mogicX/47_msmarco-gpt-category-linker-008/predictions/",
+        "linker_dir": "/data/outputs/mogicX/47_msmarco-gpt-category-linker-007/predictions/",
         "output_dir": "/data/outputs/upma/04_upma-with-ngame-gpt-category-linker-for-msmarco-001/predictions/",
     }
 
@@ -92,10 +92,12 @@ if __name__ == '__main__':
         sub_scores = ndcg(data_lbl_sub, block.test.dset.data.data_lbl, k=10)[:, -1]
         cat_scores = ndcg(data_lbl_cat, block.test.dset.data.data_lbl, k=10)[:, -1]
 
+        print(f"{dataset} -> (category: {cat_scores.mean():.4f}; substring: {sub_scores.mean():.4f})")
+
         # Dataset
         meta_kwargs = {
-            "sub_meta": SMetaXCDataset(prefix="sub", data_meta=data_sub, meta_info=sub_info, return_scores=True),
-            "cat_meta": SMetaXCDataset(prefix="cat", data_meta=data_cat, meta_info=cat_info, return_scores=True),
+            "sub_meta": SMetaXCDataset(prefix="sub", data_meta=data_sub, meta_info=sub_dict["info"], return_scores=True),
+            "cat_meta": SMetaXCDataset(prefix="cat", data_meta=data_cat, meta_info=cat_dict["info"], return_scores=True),
         }
         test_dset = SXCDataset(block.test.dset.data, **meta_kwargs)
 
