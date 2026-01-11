@@ -19,168 +19,33 @@ from xcai.models.PPP0XX import DBT023, DBTConfig
 os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
 
 DATASETS = [
-    # "arguana",
-    # "msmarco",
-    # "climate-fever",
-    # "dbpedia-entity",
-    # "fever",
-    # "fiqa",
-    # "hotpotqa",
-    # "nfcorpus",
-    # "nq",
-    # "quora",
-    # "scidocs",
-    # "scifact",
-    # "webis-touche2020",
-    # "trec-covid",
-    # "cqadupstack/android",
-    # "cqadupstack/english",
-    # "cqadupstack/gaming",
-    # "cqadupstack/gis",
-    # "cqadupstack/mathematica",
-    # "cqadupstack/physics",
-    # "cqadupstack/programmers",
-    # "cqadupstack/stats",
-    # "cqadupstack/tex",
-    # "cqadupstack/unix",
-    # "cqadupstack/webmasters",
-    # "cqadupstack/wordpress"
+    "arguana",
+    "msmarco",
+    "climate-fever",
+    "dbpedia-entity",
+    "fever",
+    "fiqa",
+    "hotpotqa",
+    "nfcorpus",
+    "nq",
+    "quora",
+    "scidocs",
+    "scifact",
+    "webis-touche2020",
+    "trec-covid",
+    "cqadupstack/android",
+    "cqadupstack/english",
+    "cqadupstack/gaming",
+    "cqadupstack/gis",
+    "cqadupstack/mathematica",
+    "cqadupstack/physics",
+    "cqadupstack/programmers",
+    "cqadupstack/stats",
+    "cqadupstack/tex",
+    "cqadupstack/unix",
+    "cqadupstack/webmasters",
+    "cqadupstack/wordpress"
 ]
-
-def run(output_dir:str, input_args:argparse.ArgumentParser, extra_args:argparse.ArgumentParser, mname:str, test_dset:Union[XCDataset, SXCDataset], 
-        train_dset:Optional[Union[XCDataset, SXCDataset]]=None, collator:Optional[Callable]=identity_collate_fn):
-
-    args = XCLearningArguments(
-        output_dir=output_dir,
-        logging_first_step=True,
-        per_device_train_batch_size=128,
-        per_device_eval_batch_size=1600,
-        representation_num_beams=200,
-        representation_accumulation_steps=10,
-        save_strategy="steps",
-        eval_strategy="steps",
-        eval_steps=5000,
-        save_steps=5000,
-        save_total_limit=5,
-        num_train_epochs=50,
-        predict_with_representation=True,
-        representation_search_type='BRUTEFORCE',
-        search_normalize=False, 
-
-        adam_epsilon=1e-6,
-        warmup_steps=1000,
-        weight_decay=0.01,
-        learning_rate=6e-5,
-        label_names=['plbl2data_idx', 'plbl2data_data2ptr'],
-    
-        group_by_cluster=True,
-        num_clustering_warmup_epochs=10,
-        num_cluster_update_epochs=5,
-        num_cluster_size_update_epochs=25,
-        clustering_type='EXPO',
-        minimum_cluster_size=2,
-        maximum_cluster_size=1600,
-    
-        metric_for_best_model='P@1',
-        load_best_model_at_end=True,
-        target_indices_key='plbl2data_idx',
-        target_pointer_key='plbl2data_data2ptr',
-    
-        use_encoder_parallel=True,
-        max_grad_norm=None,
-        fp16=True,
-
-        use_cpu_for_searching=True,
-        use_cpu_for_clustering=True,
-    )
-
-    config = DBTConfig(
-        normalize = False,
-        use_layer_norm = False,
-        use_encoder_parallel = True,
-    )
-
-    def model_fn(mname, config):
-        return DBT023.from_pretrained(mname, config=config)
-
-    do_inference = check_inference_mode(input_args)
-    model = load_model(args.output_dir, model_fn, {"mname": mname, "config": config}, do_inference=do_inference, 
-                       use_pretrained=input_args.use_pretrained)
-
-    metric = PrecReclMrr(test_dset.data.n_lbl, test_dset.data.data_lbl_filterer, prop=None if train_dset is None else train_dset.data.data_lbl, 
-                         pk=10, rk=200, rep_pk=[1, 3, 5, 10], rep_rk=[10, 100, 200], mk=[5, 10, 20])
-
-    learn = XCLearner(
-        model=model,
-        args=args,
-        train_dataset=train_dset,
-        eval_dataset=test_dset,
-        data_collator=collator,
-        compute_metrics=metric,
-    )
-    
-    save_dir_name = f"predictions_document-substring_sq-substring" if extra_args.use_task_specific_metadata else None
-    return main(learn, input_args, n_lbl=test_dset.data.n_lbl, eval_k=10, train_k=10, save_dir_name=save_dir_name)
-
-
-def load_block(dataset:str, config_file:str, input_args:argparse.ArgumentParser):
-    config_key, fname = get_config_key(config_file)
-    pkl_file = get_pkl_file(input_args.pickle_dir, f"{dataset}_{fname}_distilbert-base-uncased", input_args.use_sxc_sampler, 
-                            input_args.exact, input_args.only_test)
-
-    os.makedirs(os.path.dirname(pkl_file), exist_ok=True)
-    block = build_block(pkl_file, config_file, input_args.use_sxc_sampler, config_key, do_build=input_args.build_block, 
-                        only_test=input_args.only_test, n_slbl_samples=1, main_oversample=False, n_sdata_meta_samples=1, 
-                        meta_oversample=False, return_scores=True)
-    train_dset, test_dset = None if block.train is None else block.train.dset, block.test.dset
-
-    return train_dset, test_dset 
-
-
-def beir_inference(output_dir:str, input_args:argparse.ArgumentParser, extra_args:argparse.ArgumentParser, mname:str):
-    metric_dir = f"{output_dir}/metrics_document-substring_sq-substring" if extra_args.use_task_specific_metadata else f"{output_dir}/metrics"
-    os.makedirs(metric_dir, exist_ok=True)
-
-    input_args.only_test = input_args.do_test_inference = input_args.save_test_prediction = True
-
-    for dataset in tqdm(DATASETS):
-        print(dataset)
-
-        config_file = f"/data/datasets/beir/{dataset}/XC/configs/data.json"
-        train_dset, test_dset = load_block(dataset, config_file, input_args)
-
-        dataset = dataset.replace("/", "-")
-        linker_dir = "00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001"
-
-        if extra_args.use_task_specific_metadata:
-            save_file = f"{input_args.pickle_dir}/{linker_dir}/{dataset}_document-substring_sq-substring.joblib"
-            meta_file = f"/data/outputs/upma/{linker_dir}/raw_data_document-substring_sq-substring/test_{dataset}.raw.csv"
-        else:
-            save_file = f"{input_args.pickle_dir}/{linker_dir}/{dataset}.joblib"
-            meta_file = f"/data/outputs/upma/{linker_dir}/raw_data/test_{dataset}.raw.csv"
-        
-        if not os.path.exists(meta_file):
-            continue
-
-        data_info = load_info(save_file, meta_file, mname, sequence_length=128)
-        test_dset = SXCDataset(SMainXCDataset(data_info=data_info, data_lbl=test_dset.data.data_lbl, lbl_info=test_dset.data.lbl_info))
-
-        input_args.prediction_suffix = dataset
-        trn_repr, tst_repr, lbl_repr, trn_pred, tst_pred, trn_metric, tst_metric = run(output_dir, input_args, extra_args, mname, test_dset, train_dset)
-
-        with open(f"{metric_dir}/{dataset}.json", "w") as file:
-            json.dump({dataset: tst_metric}, file, indent=4)
-
-    beir_metrics = {}
-    for dataset in tqdm(BEIR_DATASETS):
-        fname = f"{metric_dir}/{dataset.replace('/', '-')}.json"
-        if os.path.exists(fname):
-            with open(fname) as file:
-                beir_metrics.update(json.load(file))
-
-    with open(f"{metric_dir}/beir.json", "w") as file:
-        json.dump(beir_metrics, file, indent=4)
-
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
@@ -194,13 +59,20 @@ if __name__ == '__main__':
     mname = "distilbert-base-uncased"
 
     if input_args.beir_mode:
-        beir_inference(output_dir, input_args, extra_args, mname)
+        linker_dir = "/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/"
+        raw_dir_name = "cross_raw_data/document-substring_sq-substring"
+
+        metric_dir_name = "cross_metrics/document-substring_sq-substring"
+        pred_dir_name = "cross_predictions/document-substring_sq-substring"
+
+        early_fusion_beir_inference(output_dir, input_args, mname, linker_dir=linker_dir, raw_dir_name=raw_dir_name, metric_dir_name=metric_dir_name, 
+                                    pred_dir_name=pred_dir_name)
     else:
         config_file = (
-            "configs/msmarco/data-ngame-gpt-substring_lbl_ce-negatives-topk-05-linker_exact.json"
+            "configs/msmarco/substring/data-ngame-gpt-substring_lbl_ce-negatives-topk-05-linker_exact.json"
             if input_args.exact else
-            "configs/msmarco/data-ngame-gpt-substring_lbl.json"
+            "configs/msmarco/substring/data-ngame-gpt-substring_lbl.json"
         )
-        train_dset, test_dset = load_block("msmarco", config_file, input_args)
-        run(output_dir, input_args, extra_args, mname, test_dset, train_dset)
+        train_dset, test_dset = load_early_fusion_block("msmarco", config_file, input_args)
+        early_fusion_run(output_dir, input_args, mname, test_dset, train_dset)
 

@@ -6,43 +6,20 @@ __all__ = []
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 3
 import os, torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
 from tqdm.auto import tqdm
+from typing import Optional
 
 from xcai.basics import *
+from xcai.misc import *
 from sugar.core import *
 
 from xclib.utils.sparse import retain_topk
 
-DATASETS = [
-    "arguana",
-    "msmarco",
-    "climate-fever",
-    "dbpedia-entity",
-    "fever",
-    "fiqa",
-    "hotpotqa",
-    "nfcorpus",
-    "nq",
-    "quora",
-    "scidocs",
-    "scifact",
-    "webis-touche2020",
-    "trec-covid",
-    "cqadupstack/android",
-    "cqadupstack/english",
-    "cqadupstack/gaming",
-    "cqadupstack/gis",
-    "cqadupstack/mathematica",
-    "cqadupstack/physics",
-    "cqadupstack/programmers",
-    "cqadupstack/stats",
-    "cqadupstack/tex",
-    "cqadupstack/unix",
-    "cqadupstack/webmasters",
-    "cqadupstack/wordpress"
-]
-
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
+
+    ## MSMARCO metadata
+
+    # use_task_specific_metadata = False
 
     # output_dir = "/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/"
     # info_file = "/data/datasets/beir/msmarco/XC/substring/raw_data/substring.raw.csv"
@@ -50,46 +27,61 @@ if __name__ == '__main__':
     # output_dir = "/data/outputs/upma/06_msmarco-gpt-narrow-substring-linker-with-ngame-loss-001/"
     # info_file = "/data/datasets/beir/msmarco/XC/narrow_substring/raw_data/substring.raw.csv"
 
-    output_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-001/"
+    # output_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-001/"
     # info_file = "/data/datasets/beir/msmarco/XC/intent_substring/raw_data/intent.raw.csv"
-    info_file = "/data/datasets/beir/msmarco/XC/intent_substring/raw_data/all-intent.raw.csv"
+    # info_file = "/data/datasets/beir/msmarco/XC/intent_substring/raw_data/all-intent.raw.csv"
 
-    save_dir_name, raw_dir_name = "predictions_all-intent", "raw_data_all-intent"
+    # save_dir_name, raw_dir_name = "cross_predictions/all-intent", "cross_raw_data/all-intent"
 
     # Metadata information
-    meta_info = Info.from_txt(info_file, info_column_names=["identifier", "input_text"])
+    # meta_info = Info.from_txt(info_file, info_column_names=["identifier", "input_text"])
+
+
+    ## BeIR task specific metadata
+
+    use_task_specific_metadata = True
 
     # output_dir = "/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/"
-    # save_dir_name, raw_dir_name = "predictions_document-substring_sq-substring", "raw_data_document-substring_sq-substring"
+    # save_dir_name, raw_dir_name = "cross_predictions/document-substring_sq-substring", "cross_raw_data/document-substring_sq-substring"
+
+    # output_dir = "/data/outputs/mogicX/47_msmarco-gpt-category-linker-007/"
+    # save_dir_name, raw_dir_name = "cross_predictions/document-substring_sq-substring", "cross_raw_data/document-substring_sq-substring"
+
+    output_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-001/"
+    save_dir_name, raw_dir_name = "cross_predictions/document-substring_sq-substring", "cross_raw_data/document-substring_sq-substring"
 
     os.makedirs(f"{output_dir}/{raw_dir_name}", exist_ok=True)
 
-    def get_input_text(dataset, dset_type:str):
+
+    def get_input_text(dataset:str, dset_type:str, use_task_specific_metadata:Optional[bool]=False):
         # Query info
         info_file = f"/data/datasets/beir/{dataset}/XC/raw_data/{dset_type}.raw.csv"
         data_info = Info.from_txt(info_file, info_column_names=["identifier", "input_text"])
         
-        # # Metadata info
-        # info_file = f"/data/datasets/beir/{dataset}/XC/document_substring/raw_data/sq-substring.raw.csv"
-        # meta_info = Info.from_txt(info_file, info_column_names=["identifier", "input_text"])
-
+        if use_task_specific_metadata:
+            info_file = f"/data/datasets/beir/{dataset}/XC/document_substring/raw_data/sq-substring.raw.csv"
+            if not os.path.exists(info_file):
+                print(f"WARNING:: Missing raw file at {info_file}. Dataset '{dataset}' will be skipped.")
+                return
+            meta_info = Info.from_txt(info_file, info_column_names=["identifier", "input_text"])
+    
         # Metadata predictions
         dataset = dataset.replace("/", "-")
         meta_file = f"{output_dir}/{save_dir_name}/{dset_type}_predictions_{dataset}.npz"
         data_meta = retain_topk(sp.load_npz(meta_file), k=5)
-
+    
         assert data_meta.shape[0] == len(data_info["identifier"])
         assert data_meta.shape[1] == len(meta_info["identifier"])
-
+    
         data_text = [txt+" [SEP] "+" [SEP] ".join(meta_info["input_text"][i] for i in row.indices) for txt,row in zip(data_info["input_text"],data_meta)]
-
+    
         # Save info
         info_file = f"{output_dir}/{raw_dir_name}/{dset_type}_{dataset}.raw.csv"
         save_raw_file(info_file, data_info["identifier"], data_text) 
-        
 
-    for dataset in tqdm(DATASETS):
-        get_input_text(dataset, "test")
+
+    for dataset in tqdm(BEIR_DATASETS):
+        get_input_text(dataset, "test", use_task_specific_metadata=use_task_specific_metadata)
 
         # if dataset == "msmarco": 
         #     get_input_text(dataset, "train")

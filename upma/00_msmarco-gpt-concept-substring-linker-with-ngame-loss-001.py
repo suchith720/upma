@@ -10,25 +10,14 @@ os.environ['CUDA_VISIBLE_DEVICES'] = "0,1"
 import torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
 
 from xcai.basics import *
+from xcai.misc import *
 from xcai.models.PPP0XX import DBT009, DBTConfig
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 5
 os.environ['WANDB_PROJECT'] = "01_upma-msmarco-gpt-concept-substring-linker"
 
-def additional_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--pct', type=float, default=1.0)
-    parser.add_argument('--use_all', action="store_true")
-    parser.add_argument('--lbl_sim', action="store_true")
-    parser.add_argument('--use_train_test_set', action="store_true")
-    return parser.parse_known_args()[0]
-
-def get_random_idx(n_data:int, pct:float):
-    n_trn = int(pct * n_data)
-    return np.random.permutation(n_data)[:n_trn]
-
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
-if __name__ == '__main__':
+if __name__ == "__main__":
     output_dir = "/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001"
 
     input_args = parse_args()
@@ -39,6 +28,8 @@ if __name__ == '__main__':
 
     if extra_args.use_all:
         config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-all-substring.json"
+        input_args.prediction_suffix = "all-substring" 
+
         assert input_args.do_test_inference, f"All concept substrings should be used in inference mode"
     else:
         config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-substring.json"
@@ -56,7 +47,7 @@ if __name__ == '__main__':
     block = build_block(pkl_file, config_file, input_args.use_sxc_sampler, config_key, do_build=input_args.build_block, only_test=input_args.only_test, 
                         n_slbl_samples=1, main_oversample=False)
 
-    if do_inference and not extra_args.use_train_test_set: 
+    if do_inference and not extra_args.use_training_test_set: 
         train_dset, test_dset = None if block.train is None else block.train.dset, block.test.dset
     else: 
         train_dset = block.train.dset.get_valid_dset()
@@ -136,12 +127,7 @@ if __name__ == '__main__':
         compute_metrics=metric,
     )
 
-    eval_dataset = None
-    if extra_args.lbl_sim:
-        lbl_info = test_dset.data.lbl_info
-        eval_dataset = SXCDataset(SMainXCDataset(data_info=lbl_info, lbl_info=lbl_info))
-        mname = mname.split("/")[1] if "/" in mname else mname
-        input_args.prediction_suffix = f"labels_{mname}" if input_args.use_pretrained else "labels" 
+    eval_dataset = get_label_dataset(test_dset, mname, input_args) if extra_args.lbl_sim else None
 
     main(learn, input_args, n_lbl=test_dset.data.n_lbl, eval_dataset=eval_dataset, eval_k=10, train_k=10)
     

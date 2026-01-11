@@ -5,7 +5,7 @@ __all__ = []
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 3
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = "2,3"
+# os.environ['CUDA_VISIBLE_DEVICES'] = "2,3"
 
 import argparse, json
 from tqdm.auto import tqdm
@@ -16,6 +16,21 @@ from xcai.basics import *
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 5
 os.environ['WANDB_PROJECT'] = "01_upma-msmarco-gpt-concept-substring-linker"
+
+DATASETS = [
+    "cqadupstack/android",
+    "cqadupstack/english",
+    "cqadupstack/gaming",
+    "cqadupstack/gis",
+    "cqadupstack/mathematica",
+    "cqadupstack/physics",
+    "cqadupstack/programmers",
+    "cqadupstack/stats",
+    "cqadupstack/tex",
+    "cqadupstack/unix",
+    "cqadupstack/webmasters",
+    "cqadupstack/wordpress"
+]
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
@@ -29,16 +44,25 @@ if __name__ == '__main__':
     mname = "sentence-transformers/msmarco-distilbert-cos-v5"
 
     if input_args.beir_mode:
-        meta_dir = "/data/datasets/beir/msmarco/XC/intent_substring/raw_data/"
-        meta_file = f"{meta_dir}/all-intent.raw.csv" if extra_args.use_all else f"{meta_dir}/intent.raw.csv"
-        save_file_name = "msmarco-all-intent-substring" if extra_args.use_all else "msmarco-intent-substring" 
-        pred_dir_name = "all-predictions" if extra_args.use_all else "predictions"
+        if extra_args.use_task_specific_metadata:
+            meta_file = "document_substring/raw_data/sq-substring.raw.csv"
+            save_file_name = "document-substring_sq-substring"
+            pred_dir_name = "cross_predictions/document-substring_sq-substring"
+        else:
+            meta_dir = "intent_substring/raw_data/"
+            meta_file = f"{meta_dir}/all-intent.raw.csv" if extra_args.use_all else f"{meta_dir}/intent.raw.csv"
+            save_file_name = "msmarco-all-intent-substring" if extra_args.use_all else "msmarco-intent-substring" 
+            pred_dir_name = "cross_predictions/all-intent" if extra_args.use_all else "predictions"
 
-        linker_beir_inference(output_dir, input_args, mname, save_file_name, meta_file, pred_dir_name=pred_dir_name)
+        linker_beir_inference(output_dir, input_args, mname, save_file_name=save_file_name, meta_file=meta_file, 
+                              pred_dir_name=pred_dir_name, use_task_specific_metadata=extra_args.use_task_specific_metadata, 
+                              datasets=DATASETS)
     else:
         if extra_args.use_all:
             config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-all-intent-substring.json"
             assert input_args.do_test_inference, f"All substrings should be used in inference mode"
+
+            input_args.prediction_suffix = "all-intent"
         else:
             config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-intent-substring.json"
         train_dset, test_dset = load_linker_block("msmarco", config_file, input_args, extra_args)

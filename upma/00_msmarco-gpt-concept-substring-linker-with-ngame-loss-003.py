@@ -5,7 +5,7 @@ __all__ = []
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 3
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = "2,3"
+# os.environ['CUDA_VISIBLE_DEVICES'] = "2,3"
 
 import torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
 from typing import Optional, Union, Callable
@@ -20,7 +20,7 @@ os.environ['WANDB_PROJECT'] = "01_upma-msmarco-gpt-concept-substring-linker"
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
-    output_dir = "/data/outputs/upma/06_msmarco-gpt-narrow-substring-linker-with-ngame-loss-001"
+    output_dir = "/home/aiscuser/scratch1/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-003"
 
     input_args = parse_args()
     extra_args = additional_args()
@@ -30,20 +30,11 @@ if __name__ == '__main__':
     mname = "sentence-transformers/msmarco-distilbert-cos-v5"
 
     if input_args.beir_mode:
-        meta_dir = "narrow_substring/raw_data/"
-        meta_file = f"{meta_dir}/all-substring.raw.csv" if extra_args.use_all else f"{meta_dir}/substring.raw.csv"
-        save_file_name = "msmarco-all-narrow-substring" if extra_args.use_all else "msmarco-narrow-substring" 
-        pred_dir_name = "cross_predictions/all-substring" if extra_args.use_all else "predictions"
-
+        meta_dir, save_file_name, pred_dir_name = "substring/raw_data/", "msmarco-substring", "predictions"
+        meta_file = f"{meta_dir}/substring.raw.csv"
         linker_beir_inference(output_dir, input_args, mname, save_file_name=save_file_name, meta_file=meta_file)
     else:
-        if extra_args.use_all:
-            config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-all-narrow-substring.json"
-            assert input_args.do_test_inference, f"All substrings should be used in inference mode"
-
-            input_args.prediction_suffix = "all-substring"
-        else:
-            config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-narrow-substring.json"
+        config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-substring-conflation-02.json"
 
         train_dset, test_dset = load_linker_block("msmarco", config_file, input_args, extra_args)
         linker_run(output_dir, input_args, mname, test_dset, train_dset)

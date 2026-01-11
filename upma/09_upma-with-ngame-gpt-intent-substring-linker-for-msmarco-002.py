@@ -5,7 +5,7 @@ __all__ = []
 
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 2
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
 
 import torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
 
@@ -19,7 +19,7 @@ os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
 if __name__ == '__main__':
     input_args = parse_args()
 
-    output_dir = "/home/aiscuser/scratch1/outputs/upma/09_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-001"
+    output_dir = "/home/aiscuser/scratch1/outputs/upma/09_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-002"
 
     input_args.use_sxc_sampler = True
     input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
@@ -28,7 +28,8 @@ if __name__ == '__main__':
     if input_args.beir_mode:
         meta_file = "/data/datasets/beir/msmarco/XC/intent_substring/raw_data/intent.raw.csv"
         linker_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-001/"
-        upma_beir_inference(output_dir, input_args, mname, "msmarco-intent-substring", meta_file, linker_dir, eval_batch_size=200)
+        upma_beir_inference(output_dir, input_args, mname, "msmarco-intent-substring", meta_file, linker_dir, eval_batch_size=200, 
+                            data_repr_pooling=False)
     else:
         config_file = (
             "configs/msmarco/intent_substring/data_lbl_ngame-gpt-intent-substring_ce-negatives-topk-05-linker_exact.json"
@@ -36,5 +37,5 @@ if __name__ == '__main__':
             "configs/msmarco/intent_substring/data_lbl_ngame-gpt-intent-substring.json"
         )
         train_dset, test_dset = load_upma_block("msmarco", config_file, input_args)
-        upma_run(output_dir, input_args, mname, test_dset, train_dset, train_batch_size=64, data_repr_pooling=True)
+        upma_run(output_dir, input_args, mname, test_dset, train_dset, train_batch_size=64, data_repr_pooling=False)
 

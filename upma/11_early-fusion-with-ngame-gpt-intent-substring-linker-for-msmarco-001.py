@@ -5,7 +5,7 @@ __all__ = []
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 3
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = "2,3"
+# os.environ['CUDA_VISIBLE_DEVICES'] = "2,3"
 
 import torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
 
@@ -18,6 +18,7 @@ os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
     input_args = parse_args()
+    extra_args = additional_args()
 
     output_dir = "/data/outputs/upma/11_early-fusion-with-ngame-gpt-intent-substring-linker-for-msmarco-001"
 
@@ -26,7 +27,19 @@ if __name__ == '__main__':
     mname = "distilbert-base-uncased"
 
     if input_args.beir_mode:
-        early_fusion_beir_inference(output_dir, input_args, mname, "07_msmarco-gpt-intent-substring-linker-with-ngame-loss-001")
+        linker_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-001"
+
+        if extra_args.use_task_specific_metadata:
+            raw_dir_name = "cross_raw_data/document-substring_sq-substring"
+            metric_dir_name = "cross_metrics/document-substring_sq-substring"
+            pred_dir_name = "cross_predictions/document-substring_sq-substring"
+        else:
+            raw_dir_name = "cross_raw_data/all-intent" if extra_args.use_all else "raw_data"
+            metric_dir_name = "cross_metrics/all-intent" if extra_args.use_all else "metrics"
+            pred_dir_name = "cross_predictions/all-intent" if extra_args.use_all else "predictions"
+
+        early_fusion_beir_inference(output_dir, input_args, mname, linker_dir=linker_dir, raw_dir_name=raw_dir_name, metric_dir_name=metric_dir_name, 
+                                    pred_dir_name=pred_dir_name)
     else:
         config_file = (
             "configs/msmarco/intent_substring/data-ngame-gpt-intent-substring_lbl_ce-negatives-topk-05-linker_exact.json"
