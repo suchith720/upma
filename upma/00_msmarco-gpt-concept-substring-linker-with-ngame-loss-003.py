@@ -20,7 +20,7 @@ os.environ['WANDB_PROJECT'] = "01_upma-msmarco-gpt-concept-substring-linker"
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
-    output_dir = "/home/aiscuser/scratch1/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-003"
+    output_dir = "/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-003"
 
     input_args = parse_args()
     extra_args = additional_args()
@@ -30,7 +30,7 @@ if __name__ == '__main__':
     mname = "sentence-transformers/msmarco-distilbert-cos-v5"
 
     if input_args.beir_mode:
-        meta_dir, save_file_name, pred_dir_name = "substring/raw_data/", "msmarco-substring", "predictions"
+        meta_dir, save_file_name, pred_dir_name = "substring/conflation_02/raw_data/", "msmarco-substring-conflation-02", "predictions"
         meta_file = f"{meta_dir}/substring.raw.csv"
         linker_beir_inference(output_dir, input_args, mname, save_file_name=save_file_name, meta_file=meta_file)
     else:
