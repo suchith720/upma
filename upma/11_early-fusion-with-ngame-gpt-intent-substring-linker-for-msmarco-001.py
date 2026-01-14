@@ -30,9 +30,13 @@ if __name__ == '__main__':
         linker_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-001"
 
         if extra_args.use_task_specific_metadata:
-            raw_dir_name = "cross_raw_data/document-substring_sq-substring"
-            metric_dir_name = "cross_metrics/document-substring_sq-substring"
-            pred_dir_name = "cross_predictions/document-substring_sq-substring"
+            # raw_dir_name = "cross_raw_data/document-substring_sq-substring"
+            # metric_dir_name = "cross_metrics/document-substring_sq-substring"
+            # pred_dir_name = "cross_predictions/document-substring_sq-substring"
+
+            raw_dir_name = "cross_raw_data/document-intent-substring_simple"
+            metric_dir_name = "cross_metrics/document-intent-substring_simple"
+            pred_dir_name = "cross_predictions/document-intent-substring_simple"
         else:
             raw_dir_name = "cross_raw_data/all-intent" if extra_args.use_all else "raw_data"
             metric_dir_name = "cross_metrics/all-intent" if extra_args.use_all else "metrics"

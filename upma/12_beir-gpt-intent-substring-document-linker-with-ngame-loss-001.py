@@ -17,38 +17,9 @@ from xcai.basics import *
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 5
 os.environ["WANDB_PROJECT"] = "01_upma-msmarco-gpt-concept-substring-linker"
 
-DATASETS = [
-    "arguana",
-    "msmarco",
-    "climate-fever",
-    "dbpedia-entity",
-    "fever",
-    "fiqa",
-    "hotpotqa",
-    "nfcorpus",
-    "nq",
-    # "quora",
-    "scidocs",
-    "scifact",
-    "webis-touche2020",
-    "trec-covid",
-    "cqadupstack/android",
-    "cqadupstack/english",
-    "cqadupstack/gaming",
-    "cqadupstack/gis",
-    "cqadupstack/mathematica",
-    "cqadupstack/physics",
-    "cqadupstack/programmers",
-    "cqadupstack/stats",
-    "cqadupstack/tex",
-    "cqadupstack/unix",
-    "cqadupstack/webmasters",
-    "cqadupstack/wordpress"
-]
-
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
-    output_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-001"
+    output_dir = "/data/outputs/upma/12_beir-gpt-intent-substring-document-linker-with-ngame-loss-001/"
 
     input_args = parse_args()
     extra_args = additional_args()
@@ -76,13 +47,8 @@ if __name__ == '__main__':
                               pred_dir_name=pred_dir_name, use_task_specific_metadata=extra_args.use_task_specific_metadata, 
                               datasets=DATASETS)
     else:
-        if extra_args.use_all:
-            config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-all-intent-substring.json"
-            assert input_args.do_test_inference, f"All substrings should be used in inference mode"
+        config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-intent-substring.json"
 
-            input_args.prediction_suffix = "all-intent"
-        else:
-            config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-intent-substring.json"
         train_dset, test_dset = load_linker_block("msmarco", config_file, input_args, extra_args)
         linker_run(output_dir, input_args, mname, test_dset, train_dset)
 

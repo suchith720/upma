@@ -6,13 +6,46 @@ __all__ = []
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 3
 import os, torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
 from tqdm.auto import tqdm
-from typing import Optional
+from typing import Optional, Dict, List
 
 from xcai.basics import *
 from xcai.misc import *
 from sugar.core import *
 
 from xclib.utils.sparse import retain_topk
+
+
+def get_input_text(dataset:str, dset_type:str, pred_dir_name:str, raw_dir_name:str, meta_info:Optional[Dict]=None, meta_file:Optional[str]=None, 
+                   use_task_specific_metadata:Optional[bool]=False):
+
+    # Query information
+    info_file = f"/data/datasets/beir/{dataset}/XC/raw_data/{dset_type}.raw.csv"
+    data_info = Info.from_txt(info_file, info_column_names=["identifier", "input_text"])
+    
+    if use_task_specific_metadata:
+        assert meta_file is not None
+        info_file = f"/data/datasets/beir/{dataset}/XC/{meta_file}"
+
+        if not os.path.exists(info_file):
+            print(f"WARNING:: Missing raw file at {info_file}. Dataset '{dataset}' will be skipped.")
+            return
+
+        meta_info = Info.from_txt(info_file, info_column_names=["identifier", "input_text"])
+
+    # Metadata predictions
+    dataset = dataset.replace("/", "-")
+    meta_file = f"{output_dir}/{pred_dir_name}/{dset_type}_predictions_{dataset}.npz"
+    data_meta = retain_topk(sp.load_npz(meta_file), k=5)
+
+    assert data_meta.shape[0] == len(data_info["identifier"])
+    assert data_meta.shape[1] == len(meta_info["identifier"])
+
+    data_text = [txt+" [SEP] "+" [SEP] ".join(meta_info["input_text"][i] for i in row.indices) for txt,row in zip(data_info["input_text"],data_meta)]
+
+    # Save info
+    info_file = f"{output_dir}/{raw_dir_name}/{dset_type}_{dataset}.raw.csv"
+    save_raw_file(info_file, data_info["identifier"], data_text) 
+
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
@@ -47,41 +80,18 @@ if __name__ == '__main__':
     # output_dir = "/data/outputs/mogicX/47_msmarco-gpt-category-linker-007/"
     # save_dir_name, raw_dir_name = "cross_predictions/document-substring_sq-substring", "cross_raw_data/document-substring_sq-substring"
 
+    # output_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-001/"
+    # save_dir_name, raw_dir_name = "cross_predictions/document-substring_sq-substring", "cross_raw_data/document-substring_sq-substring"
+
     output_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-001/"
-    save_dir_name, raw_dir_name = "cross_predictions/document-substring_sq-substring", "cross_raw_data/document-substring_sq-substring"
+    pred_dir_name = "cross_predictions/document-intent-substring_simple"
+    raw_dir_name = "cross_raw_data/document-intent-substring_simple"
+    meta_file = "document_intent_substring/simple/raw_data/label_intent.raw.csv"
 
     os.makedirs(f"{output_dir}/{raw_dir_name}", exist_ok=True)
-
-
-    def get_input_text(dataset:str, dset_type:str, use_task_specific_metadata:Optional[bool]=False):
-        # Query info
-        info_file = f"/data/datasets/beir/{dataset}/XC/raw_data/{dset_type}.raw.csv"
-        data_info = Info.from_txt(info_file, info_column_names=["identifier", "input_text"])
-        
-        if use_task_specific_metadata:
-            info_file = f"/data/datasets/beir/{dataset}/XC/document_substring/raw_data/sq-substring.raw.csv"
-            if not os.path.exists(info_file):
-                print(f"WARNING:: Missing raw file at {info_file}. Dataset '{dataset}' will be skipped.")
-                return
-            meta_info = Info.from_txt(info_file, info_column_names=["identifier", "input_text"])
-    
-        # Metadata predictions
-        dataset = dataset.replace("/", "-")
-        meta_file = f"{output_dir}/{save_dir_name}/{dset_type}_predictions_{dataset}.npz"
-        data_meta = retain_topk(sp.load_npz(meta_file), k=5)
-    
-        assert data_meta.shape[0] == len(data_info["identifier"])
-        assert data_meta.shape[1] == len(meta_info["identifier"])
-    
-        data_text = [txt+" [SEP] "+" [SEP] ".join(meta_info["input_text"][i] for i in row.indices) for txt,row in zip(data_info["input_text"],data_meta)]
-    
-        # Save info
-        info_file = f"{output_dir}/{raw_dir_name}/{dset_type}_{dataset}.raw.csv"
-        save_raw_file(info_file, data_info["identifier"], data_text) 
-
-
     for dataset in tqdm(BEIR_DATASETS):
-        get_input_text(dataset, "test", use_task_specific_metadata=use_task_specific_metadata)
+        get_input_text(dataset, "test", pred_dir_name, raw_dir_name, meta_info=None, meta_file=meta_file,
+                       use_task_specific_metadata=use_task_specific_metadata)
 
         # if dataset == "msmarco": 
         #     get_input_text(dataset, "train")
