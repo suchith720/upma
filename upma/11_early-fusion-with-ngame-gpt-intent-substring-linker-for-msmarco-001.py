@@ -15,6 +15,34 @@ from xcai.basics import *
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 5
 os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
 
+DATASETS = [
+    "msmarco",
+    "climate-fever",
+    "dbpedia-entity",
+    "fever",
+    "fiqa",
+    "hotpotqa",
+    "nfcorpus",
+    "nq",
+    "quora",
+    "scidocs",
+    "scifact",
+    "webis-touche2020",
+    "trec-covid",
+    "cqadupstack/android",
+    "cqadupstack/english",
+    "cqadupstack/gaming",
+    "cqadupstack/gis",
+    "cqadupstack/mathematica",
+    "cqadupstack/physics",
+    "cqadupstack/programmers",
+    "cqadupstack/stats",
+    "cqadupstack/tex",
+    "cqadupstack/unix",
+    "cqadupstack/webmasters",
+    "cqadupstack/wordpress"
+]
+
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
     input_args = parse_args()
@@ -43,7 +71,7 @@ if __name__ == '__main__':
             pred_dir_name = "cross_predictions/all-intent" if extra_args.use_all else "predictions"
 
         early_fusion_beir_inference(output_dir, input_args, mname, linker_dir=linker_dir, raw_dir_name=raw_dir_name, metric_dir_name=metric_dir_name, 
-                                    pred_dir_name=pred_dir_name)
+                                    pred_dir_name=pred_dir_name, datasets=DATASETS)
     else:
         config_file = (
             "configs/msmarco/intent_substring/data-ngame-gpt-intent-substring_lbl_ce-negatives-topk-05-linker_exact.json"
