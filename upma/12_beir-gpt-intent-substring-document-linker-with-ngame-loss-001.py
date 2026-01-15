@@ -19,7 +19,7 @@ os.environ["WANDB_PROJECT"] = "01_upma-msmarco-gpt-concept-substring-linker"
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
-    output_dir = "/data/outputs/upma/12_beir-gpt-intent-substring-document-linker-with-ngame-loss-001/"
+    output_dir = "/home/aiscuser/scratch1/outputs/upma/12_beir-gpt-intent-substring-document-linker-with-ngame-loss-001/"
 
     input_args = parse_args()
     extra_args = additional_args()
@@ -29,26 +29,10 @@ if __name__ == '__main__':
     mname = "sentence-transformers/msmarco-distilbert-cos-v5"
 
     if input_args.beir_mode:
-        if extra_args.use_task_specific_metadata:
-            # meta_file = "document_substring/raw_data/sq-substring.raw.csv"
-            # save_file_name = "document-substring_sq-substring"
-            # pred_dir_name = "cross_predictions/document-substring_sq-substring"
-
-            meta_file = "document_intent_substring/simple/raw_data/label_intent.raw.csv"
-            save_file_name = "document-intent-substring_simple"
-            pred_dir_name = "cross_predictions/document-intent-substring_simple"
-        else:
-            meta_dir = "intent_substring/raw_data/"
-            meta_file = f"{meta_dir}/all-intent.raw.csv" if extra_args.use_all else f"{meta_dir}/intent.raw.csv"
-            save_file_name = "msmarco-all-intent-substring" if extra_args.use_all else "msmarco-intent-substring" 
-            pred_dir_name = "cross_predictions/all-intent" if extra_args.use_all else "predictions"
-
-        linker_beir_inference(output_dir, input_args, mname, save_file_name=save_file_name, meta_file=meta_file, 
-                              pred_dir_name=pred_dir_name, use_task_specific_metadata=extra_args.use_task_specific_metadata, 
-                              datasets=DATASETS)
+        raise NotImplementedError("BeIR inference must be implemented.")
     else:
-        config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-intent-substring.json"
+        config_file = "/data/datasets/beir/experiments/00_beir-gpt-document-intent-substring/configs/label_gpt-document-intent-substring.json"
 
-        train_dset, test_dset = load_linker_block("msmarco", config_file, input_args, extra_args)
+        train_dset, test_dset = load_linker_block("beir-gpt-document-intent-substring", config_file, input_args, extra_args)
         linker_run(output_dir, input_args, mname, test_dset, train_dset)
 
