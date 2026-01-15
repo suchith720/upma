@@ -15,7 +15,7 @@ from xcai.main import *
 from xcai.basics import *
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 5
-os.environ["WANDB_PROJECT"] = "01_upma-msmarco-gpt-concept-substring-linker"
+os.environ["WANDB_PROJECT"] = "03_upma-beir-gpt-concept-substring-linker"
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
