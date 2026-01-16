@@ -15,42 +15,17 @@ from xcai.basics import *
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 4
 os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
 
-DATASETS = [
-    "fever",
-    "fiqa",
-    "hotpotqa",
-    "nfcorpus",
-    "nq",
-    "quora",
-    "scidocs",
-    "scifact",
-    "webis-touche2020",
-    "trec-covid",
-    "cqadupstack/android",
-    "cqadupstack/english",
-    "cqadupstack/gaming",
-    "cqadupstack/gis",
-    "cqadupstack/mathematica",
-    "cqadupstack/physics",
-    "cqadupstack/programmers",
-    "cqadupstack/stats",
-    "cqadupstack/tex",
-    "cqadupstack/unix",
-    "cqadupstack/webmasters",
-    "cqadupstack/wordpress"
-]
-
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 21
 if __name__ == '__main__':
     input_args = parse_args()
 
-    output_dir = "/data/outputs/upma/09_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-005"
+    output_dir = "/home/aiscuser/scratch1/outputs/upma/09_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-008"
 
     input_args.use_sxc_sampler = True
     input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
     mname = "distilbert-base-uncased"
 
-    memory_injection_layer = 3
+    memory_injection_layer = 5
 
     if input_args.beir_mode:
         meta_file = "/data/datasets/beir/msmarco/XC/intent_substring/conflation_01/raw_data/intent.raw.csv"
