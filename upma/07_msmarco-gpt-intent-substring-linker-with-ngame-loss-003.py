@@ -7,22 +7,19 @@ __all__ = []
 import os
 # os.environ['CUDA_VISIBLE_DEVICES'] = "2,3"
 
-import argparse, json, scipy.sparse as sp
-
+import argparse, json
 from tqdm.auto import tqdm
 
 from xcai.misc import *
 from xcai.main import *
 from xcai.basics import *
 
-from xcai.sdata import SMainXCDataset, SXCDataset
-
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 5
 os.environ['WANDB_PROJECT'] = "01_upma-msmarco-gpt-concept-substring-linker"
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
-    output_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002"
+    output_dir = "/home/aiscuser/scratch1/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-003"
 
     input_args = parse_args()
     extra_args = additional_args()
@@ -30,6 +27,8 @@ if __name__ == '__main__':
     input_args.use_sxc_sampler = True
     input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
     mname = "sentence-transformers/msmarco-distilbert-cos-v5"
+
+    extra_args.pct = 0.5
 
     if input_args.beir_mode:
         meta_dir, save_file_name, pred_dir_name = "intent_substring/conflation_01/raw_data/", "msmarco-intent-substring-conflation-01", "predictions"
@@ -41,11 +40,5 @@ if __name__ == '__main__':
         config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-intent-substring-conflation-01.json"
 
         train_dset, test_dset = load_linker_block("msmarco", config_file, input_args, extra_args)
-
-        lbl_intent = sp.load_npz("/data/datasets/beir/msmarco/XC/intent_substring/conflation_01/intent_lbl_X_Y.npz")
-        lbl_file = "/data/datasets/beir/msmarco/XC//raw_data/label.raw.txt"
-        lbl_info = load_info(f"{input_args.pickle_dir}/beir/msmarco-label.joblib", lbl_file, mname, sequence_length=128)
-        label_dset = SXCDataset(SMainXCDataset(data_info=lbl_info, data_lbl=lbl_intent, lbl_info=test_dset.data.lbl_info))
-
-        linker_run(output_dir, input_args, mname, test_dset, train_dset, label_dset=label_dset)
+        linker_run(output_dir, input_args, mname, test_dset, train_dset)
 
