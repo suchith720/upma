@@ -4,10 +4,7 @@
 __all__ = []
 
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 2
-import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
-
-import torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
+import os, torch, json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
 
 from xcai.misc import *
 from xcai.basics import *
