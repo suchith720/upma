@@ -31,7 +31,7 @@ if __name__ == '__main__':
         meta_file = "/data/datasets/beir/msmarco/XC/intent_substring/conflation_01/raw_data/intent.raw.csv"
         linker_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002/"
         upma_beir_inference(output_dir, input_args, mname, "msmarco-intent-substring-conflation-01", meta_file, linker_dir, eval_batch_size=400, 
-                            data_repr_pooling=False, memory_injection_layer=memory_injection_layer, datasets=DATASETS)
+                            data_repr_pooling=False, memory_injection_layer=memory_injection_layer)
     else:
         config_file = (
             "configs/msmarco/intent_substring/data_lbl_ngame-gpt-intent-substring-conflation-01_ce-negatives-topk-05-linker_exact.json"
