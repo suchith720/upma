@@ -19,7 +19,7 @@ os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
 if __name__ == '__main__':
     input_args = parse_args()
 
-    output_dir = "/home/aiscuser/scratch1/outputs/upma/13_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-query-and-label-001"
+    output_dir = "/home/aiscuser/scratch1/outputs/upma/13_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-query-and-label-002"
 
     input_args.use_sxc_sampler = True
     input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
@@ -31,7 +31,8 @@ if __name__ == '__main__':
         meta_file = "/data/datasets/beir/msmarco/XC/intent_substring/conflation_01/raw_data/intent.raw.csv"
         linker_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002/"
         upma_beir_inference(output_dir, input_args, mname, "msmarco-intent-substring-conflation-01", meta_file, linker_dir, eval_batch_size=400, 
-                            data_repr_pooling=False, memory_injection_layer=memory_injection_layer, use_label_memory=True) 
+                            data_repr_pooling=False, memory_injection_layer=memory_injection_layer, use_label_memory=True, n_lbl_lnk_samples=10, 
+                            lbl_lnk_topk=10) 
     else:
         config_file = (
             "configs/msmarco/intent_substring/data_lbl_ngame-gpt-intent-substring-conflation-01_ce-negatives-topk-05-linker-label-intent-substring_exact.json"
@@ -39,7 +40,8 @@ if __name__ == '__main__':
             "configs/msmarco/intent_substring/data_lbl_ngame-gpt-intent-substring-conflation-01_label-intent-substring.json"
         )
 
-        train_dset, test_dset = load_upma_block("msmarco", config_file, input_args)
+        train_dset, test_dset = load_upma_block("msmarco", config_file, input_args, n_lbl_lnk_samples=10, n_neg_lnk_samples=10, 
+                                                lbl_lnk_topk=10, neg_lnk_topk=10)
         upma_run(output_dir, input_args, mname, test_dset, train_dset, train_batch_size=128, data_repr_pooling=False, 
-                 memory_injection_layer=memory_injection_layer, use_label_memory=True)
+                 memory_injection_layer=memory_injection_layer, use_label_memory=True, num_input_metadata=10)
 
