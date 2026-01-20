@@ -4,10 +4,7 @@
 __all__ = []
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 3
-import os
-# os.environ['CUDA_VISIBLE_DEVICES'] = "2,3"
-
-import argparse, json, scipy.sparse as sp
+import os, argparse, json, scipy.sparse as sp
 
 from tqdm.auto import tqdm
 
@@ -69,10 +66,11 @@ if __name__ == '__main__':
 
         train_dset, test_dset = load_linker_block("msmarco", config_file, input_args, extra_args)
 
-        lbl_intent = sp.load_npz("/data/datasets/beir/msmarco/XC/intent_substring/conflation_01/intent_lbl_X_Y.npz")
-        lbl_file = "/data/datasets/beir/msmarco/XC//raw_data/label.raw.txt"
-        lbl_info = load_info(f"{input_args.pickle_dir}/beir/msmarco-label.joblib", lbl_file, mname, sequence_length=128)
-        label_dset = SXCDataset(SMainXCDataset(data_info=lbl_info, data_lbl=lbl_intent, lbl_info=test_dset.data.lbl_info))
+        # lbl_intent = sp.load_npz("/data/datasets/beir/msmarco/XC/intent_substring/conflation_01/intent_lbl_X_Y.npz")
+        # lbl_file = "/data/datasets/beir/msmarco/XC//raw_data/label.raw.txt"
+        # lbl_info = load_info(f"{input_args.pickle_dir}/beir/msmarco-label.joblib", lbl_file, mname, sequence_length=128)
+        # label_dset = SXCDataset(SMainXCDataset(data_info=lbl_info, data_lbl=lbl_intent, lbl_info=test_dset.data.lbl_info))
+        label_dset = None
 
-        linker_run(output_dir, input_args, mname, test_dset, train_dset, label_dset=label_dset)
+        linker_run(output_dir, input_args, mname, test_dset, train_dset, label_dset=label_dset, normalize=False)
 
