@@ -133,16 +133,19 @@ def upma_run(output_dir:str, input_args:argparse.ArgumentParser, mname:str, test
         model = UPA000.from_pretrained(config, mname=mname, meta_dset=meta_dset, batch_size=1000)
         return model
 
+    def init_fn(model):
+        with torch.no_grad():
+            fname = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002/predictions/label_repr_unnormalized.pth"
+            meta_embeds = torch.load(fname)
+            meta_embeds = torch.vstack([meta_embeds, torch.zeros((1,768))])
+            model.encoder.memory_modules[0].set_metadata_embeddings(meta_embeds)
+            model.encoder.memory_modules[0].metadata_embeddings.weight.requires_grad_(False)
+
     metric = PrecReclMrr(test_dset.n_lbl, test_dset.data.data_lbl_filterer, pk=10, rk=200, rep_pk=[1, 3, 5, 10],
                          rep_rk=[10, 100, 200], mk=[5, 10, 20])
 
-    model = load_model(args.output_dir, model_fn, do_inference=check_inference_mode(input_args), use_pretrained=input_args.use_pretrained)
-
-    with torch.no_grad():
-        meta_embeds = torch.load("/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002/predictions/label_repr_unnormalized.pth")
-        meta_embeds = torch.vstack([meta_embeds, torch.zeros((1,768))])
-        model.encoder.memory_modules[0].set_metadata_embeddings(meta_embeds)
-        model.encoder.memory_modules[0].metadata_embeddings.weight.requires_grad_(False)
+    model = load_model(args.output_dir, model_fn, init_fn=init_fn, do_inference=check_inference_mode(input_args), 
+                       use_pretrained=input_args.use_pretrained)
 
     learn = XCLearner(
         model=model,
@@ -171,8 +174,8 @@ if __name__ == '__main__':
     if input_args.beir_mode:
         meta_file = "/data/datasets/beir/msmarco/XC/intent_substring/conflation_01/raw_data/intent.raw.csv"
         linker_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002/"
-        upma_beir_inference(output_dir, input_args, mname, "msmarco-intent-substring-conflation-01", meta_file, linker_dir, eval_batch_size=400, 
-                            data_repr_pooling=False, memory_injection_layer=memory_injection_layer, datasets=DATASETS)
+        upma_beir_inference(output_dir, input_args, mname, "msmarco-intent-substring-conflation-01", meta_file, linker_dir, eval_batch_size=300, 
+                            data_repr_pooling=False, memory_injection_layer=memory_injection_layer, data_lnk_topk=5, n_data_lnk_samples=5)
     else:
         config_file = (
             "configs/msmarco/intent_substring/data_lbl_ngame-gpt-intent-substring-conflation-01_ce-negatives-topk-05-linker_exact.json"
