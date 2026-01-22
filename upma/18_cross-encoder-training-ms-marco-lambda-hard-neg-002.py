@@ -12,7 +12,7 @@ from sentence_transformers.util import mine_hard_negatives
 
 
 def main():
-    output_dir = "/home/aiscuser/scratch1/outputs/upma/18_cross-encoder-training-ms-marco-lambda-hard-neg-001"
+    output_dir = "/home/aiscuser/scratch1/outputs/upma/18_cross-encoder-training-ms-marco-lambda-hard-neg-002"
     pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
 
     model_name = "microsoft/MiniLM-L12-H384-uncased"
@@ -42,6 +42,8 @@ def main():
     print("Model num labels:", model.num_labels)
 
     # 2. Load the MS MARCO dataset: https://huggingface.co/datasets/microsoft/ms_marco
+    dset_file = f"{pickle_dir}/18_cross-encoder-training-ms-marco-lambda-hard-neg-msmarco-dataset.joblib"
+
     logging.info("Read train dataset")
     dataset = load_dataset("microsoft/ms_marco", "v1.1", split="train")
 
@@ -83,7 +85,6 @@ def main():
 
     # Create a dataset with a "query" column with strings, a "docs" column with lists of strings,
     # and a "labels" column with lists of floats
-    dset_file = f"{pickle_dir}/18_cross-encoder-training-ms-marco-lambda-hard-neg-listwise-dataset.joblib"
 
     if os.path.exists(dset_file):
         listwise_dataset = joblib.load(dset_file)
