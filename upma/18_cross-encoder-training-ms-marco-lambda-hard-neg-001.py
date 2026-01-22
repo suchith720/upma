@@ -4,7 +4,7 @@ from datetime import datetime
 from datasets import Dataset, concatenate_datasets, load_dataset
 
 from sentence_transformers import CrossEncoder, SentenceTransformer
-from sentence_transformers.cross_encoder.evaluation import CrossEncoderNanoBEIREvaluator
+from sentence_transformers.cross_encoder.evaluation import CrossEncoderRerankingEvaluator
 from sentence_transformers.cross_encoder.losses import LambdaLoss, NDCGLoss2PPScheme
 from sentence_transformers.cross_encoder.trainer import CrossEncoderTrainer
 from sentence_transformers.cross_encoder.training_args import CrossEncoderTrainingArguments
@@ -77,7 +77,7 @@ def main():
 
         return {
             "query": processed_queries,
-            "docs": processed_docs,
+            "positive": processed_docs,
             "labels": processed_labels,
         }
 
@@ -206,6 +206,7 @@ def main():
         loss=loss,
         evaluator=evaluator,
     )
+
     trainer.train()
 
     # 7. Evaluate the final model, useful to include these in the model card

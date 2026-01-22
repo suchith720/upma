@@ -44,6 +44,11 @@ def main():
     # 2. Load the MS MARCO dataset: https://huggingface.co/datasets/microsoft/ms_marco
     dset_file = f"{pickle_dir}/18_cross-encoder-training-ms-marco-lambda-hard-neg-msmarco-dataset.joblib"
 
+
+
+
+
+
     logging.info("Read train dataset")
     dataset = load_dataset("microsoft/ms_marco", "v1.1", split="train")
 
