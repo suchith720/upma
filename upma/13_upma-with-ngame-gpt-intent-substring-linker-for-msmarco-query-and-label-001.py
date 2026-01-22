@@ -19,7 +19,7 @@ os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
 if __name__ == '__main__':
     input_args = parse_args()
 
-    output_dir = "/home/aiscuser/scratch1/outputs/upma/13_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-query-and-label-001"
+    output_dir = "/data/outputs/upma/13_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-query-and-label-001"
 
     input_args.use_sxc_sampler = True
     input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"

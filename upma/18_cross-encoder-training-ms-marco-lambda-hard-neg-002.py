@@ -1,6 +1,7 @@
-import joblib, os, logging, traceback, torch
+import joblib, os, logging, traceback, torch, scipy.sparse as sp, pandas as pd
 
 from datetime import datetime
+from tqdm.auto import tqdm
 from datasets import Dataset, concatenate_datasets, load_dataset
 
 from sentence_transformers import CrossEncoder, SentenceTransformer
@@ -10,8 +11,10 @@ from sentence_transformers.cross_encoder.trainer import CrossEncoderTrainer
 from sentence_transformers.cross_encoder.training_args import CrossEncoderTrainingArguments
 from sentence_transformers.util import mine_hard_negatives
 
+from xcai.basics import *
 
 def main():
+    input_args = parse_args()
     output_dir = "/home/aiscuser/scratch1/outputs/upma/18_cross-encoder-training-ms-marco-lambda-hard-neg-002"
     pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
 
@@ -42,125 +45,73 @@ def main():
     print("Model num labels:", model.num_labels)
 
     # 2. Load the MS MARCO dataset: https://huggingface.co/datasets/microsoft/ms_marco
-    dset_file = f"{pickle_dir}/18_cross-encoder-training-ms-marco-lambda-hard-neg-msmarco-dataset.joblib"
+    input_args.use_sxc_sampler = True
+    input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
 
+    config_file = "configs/msmarco/intent_substring/data_lbl_ngame-gpt-intent-substring-conflation-01_ce-negatives-topk-05-linker-label-intent-substring_exact.json"
+    train_dset, test_dset = load_upma_block("msmarco", config_file, input_args)
 
+    def get_positive_dataset(dset):
+        data_info, lbl_info = dset.data.data_info["input_text"], dset.data.lbl_info["input_text"]
 
+        queries, docs, labels = [], [], []
+        for idx in tqdm(range(dset.data.data_lbl.shape[0])):
+            indices = dset.data.data_lbl[idx].indices
+            queries.append(data_info[idx]) 
+            docs.append([lbl_info[i] for i in indices])
+            labels.append([1] * len(indices))
 
+        return Dataset.from_dict({"query": queries, "docs": docs, "labels": labels})
 
+    pos_dataset = get_positive_dataset(train_dset)
+    logging.info(f"Created {len(pos_dataset):_} query-positive pairs")
 
-    logging.info("Read train dataset")
-    dataset = load_dataset("microsoft/ms_marco", "v1.1", split="train")
+    def get_negative_dataset(dset):
+        data_info, lbl_info = dset.data.data_info["input_text"], dset.meta["neg_meta"].meta_info["input_text"]
 
-    # 2a. Prepare the normal MS MARCO dataset for training
-    def listwise_mapper(batch, max_docs: int | None = 10):
-        processed_queries = []
-        processed_docs = []
-        processed_labels = []
+        queries, docs, labels = [], [], []
+        for idx in tqdm(range(dset.meta["neg_meta"].data_meta.shape[0])):
+            indices = dset.meta["neg_meta"].data_meta[idx].indices
+            queries.append(data_info[idx]) 
+            docs.append([lbl_info[i] for i in indices])
+            labels.append([0] * len(indices))
 
-        for query, passages_info in zip(batch["query"], batch["passages"]):
-            # Extract passages and labels
-            passages = passages_info["passage_text"]
-            labels = passages_info["is_selected"]
+        return Dataset.from_dict({"query": queries, "docs": docs, "labels": labels})
 
-            # Pair passages with labels and sort descending by label (positives first)
-            paired = sorted(zip(passages, labels), key=lambda x: x[1], reverse=True)
+    neg_dataset = get_negative_dataset(train_dset)
+    logging.info(f"Created {len(neg_dataset):_} query-negative pairs")
 
-            # Separate back to passages and labels
-            sorted_passages, sorted_labels = zip(*paired) if paired else ([], [])
+    # Concatenate the two datasets into one to  form training dataset
+    train_dataset = concatenate_datasets([pos_dataset, neg_dataset])
 
-            # Filter queries without any positive labels
-            if max(sorted_labels) < 1.0:
-                continue
+    # Evaluation dataset
 
-            # Truncate to max_docs
-            if max_docs is not None:
-                sorted_passages = list(sorted_passages[:max_docs])
-                sorted_labels = list(sorted_labels[:max_docs])
+    def get_eval_dataset(dset, pred_file, lbl_file):
+        pos_dataset = get_positive_dataset(dset)
 
-            processed_queries.append(query)
-            processed_docs.append(sorted_passages)
-            processed_labels.append(sorted_labels)
+        pred_lbl = sp.load_npz(pred_file)
+        lbl_info = pd.read_csv(lbl_file)["text"]
 
-        return {
-            "query": processed_queries,
-            "docs": processed_docs,
-            "labels": processed_labels,
-        }
+        assert len(pos_dataset) == pred_lbl.shape[0]
 
-    # Create a dataset with a "query" column with strings, a "docs" column with lists of strings,
-    # and a "labels" column with lists of floats
+        eval_dataset = []
+        for idx in range(pred_lbl.shape[0]):
+            o = pos_dataset[idx]
 
-    if os.path.exists(dset_file):
-        listwise_dataset = joblib.load(dset_file)
-    else:
-        listwise_dataset = dataset.map(
-            lambda batch: listwise_mapper(batch=batch, max_docs=max_docs),
-            batched=True,
-            remove_columns=dataset.column_names,
-            desc="Processing listwise samples",
-        )
-        joblib.dump(listwise_dataset, dset_file)
+            indices = pred_lbl[idx].indices
+            sort_idx = np.argsort(pred_lbl[idx].data)[::-1]
+            documents = [lbl_info[i] for i in indices[sort_idx]]
+            o.update({"documents": documents})
 
-    # 2b. Prepare the hard negative dataset by mining hard negatives
-    embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-    embedding_model_batch_size = 1024
-    skip_n_hardest = 3
-    num_hard_negatives = 9  # 1 positive + 9 negatives
+            eval_dataset.append(o)
 
-    logging.info("Creating hard negative dataset")
-    queries = []
-    positives = []
+        return eval_dataset
 
-    # Extract all queries and positive pairs
-    for item in dataset:
-        query = item["query"]
-        passages = item["passages"]["passage_text"]
-        labels = item["passages"]["is_selected"]
+    pred_file = "/data/outputs/upma/09_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-008/predictions/test_predictions_msmarco.npz"
+    lbl_file = "/data/datasets/beir/msmarco/XC/raw_data/label.raw.csv"
 
-        # Find positive passages
-        for i, (passage, label) in enumerate(zip(passages, labels)):
-            if label > 0:
-                queries.append(query)
-                positives.append(passage)
+    eval_dataset = get_eval_dataset(test_dset, pred_file, lbl_file)
 
-    pairs_dataset = Dataset.from_dict({"query": queries, "positive": positives})
-    logging.info(f"Created {len(pairs_dataset):_} query-positive pairs")
-
-    # Extract all passages to use as corpus
-    all_passages = []
-    for item in dataset:
-        all_passages.extend(item["passages"]["passage_text"])
-
-    # Remove duplicates
-    all_passages = list(set(all_passages))
-    logging.info(f"Corpus contains {len(all_passages):_} unique passages")
-
-    # Use the mine_hard_negatives utility to find hard negatives
-    neg_file = f"{pickle_dir}/18_cross-encoder-training-ms-marco-lambda-hard-neg-hard-negatives.joblib"
-
-    if os.path.exists(neg_file):
-        hard_negatives_dataset = joblib.load(neg_file)
-    else:
-        hard_negatives_dataset = mine_hard_negatives(
-            dataset=pairs_dataset,
-            model=embedding_model,
-            corpus=all_passages,  # Use all passages as the corpus
-            num_negatives=num_hard_negatives,
-            range_min=skip_n_hardest,  # Skip the most similar passages
-            range_max=skip_n_hardest + num_hard_negatives * 3,  # Look for negatives in a reasonable range
-            batch_size=embedding_model_batch_size,
-            output_format="labeled-list",
-            use_faiss=True,
-        )
-        joblib.dump(hard_negatives_dataset, neg_file)
-
-    # Concatenate the two datasets into one
-    dataset: Dataset = concatenate_datasets([listwise_dataset, hard_negatives_dataset])
-
-    dataset = dataset.train_test_split(test_size=1_000, seed=12)
-    train_dataset = dataset["train"]
-    eval_dataset = dataset["test"]
     logging.info(train_dataset)
 
     # 3. Define our training loss
@@ -174,9 +125,11 @@ def main():
     evaluator = CrossEncoderNanoBEIREvaluator(dataset_names=["msmarco", "nfcorpus", "nq"], batch_size=eval_batch_size)
     evaluator(model)
 
+    return
+
     # 5. Define the training arguments
     short_model_name = model_name if "/" not in model_name else model_name.split("/")[-1]
-    run_name = f"reranker-msmarco-v1.1-{short_model_name}-lambdaloss-hard-neg"
+    run_name = f"reranker-msmarco-{short_model_name}-lambdaloss-hard-neg"
     args = CrossEncoderTrainingArguments(
         # Required parameter:
         output_dir=f"{output_dir}/{run_name}_{dt}",
