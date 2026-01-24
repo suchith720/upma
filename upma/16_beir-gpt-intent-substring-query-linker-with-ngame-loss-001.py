@@ -70,7 +70,7 @@ if __name__ == '__main__':
 
         linker_beir_inference(output_dir, input_args, mname, save_file_name=save_file_name, meta_file=meta_file, 
                               pred_dir_name=pred_dir_name, use_task_specific_metadata=extra_args.use_task_specific_metadata, 
-                              datasets=DATASETS, eval_batch_size=1600)
+                              datasets=DATASETS, eval_batch_size=1600, model_type="last")
     else:
         config_file = "/data/datasets/beir/experiments/00_beir-gpt-document-intent-substring/configs/simple-query_gpt-document-intent-substring.json"
 
