@@ -17,9 +17,38 @@ from xcai.basics import *
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 5
 os.environ["WANDB_PROJECT"] = "03_upma-beir-gpt-concept-substring-linker"
 
+DATASETS = [
+    "arguana",
+    "msmarco",
+    "climate-fever",
+    "dbpedia-entity",
+    "fever",
+    "fiqa",
+    "hotpotqa",
+    "nfcorpus",
+    "nq",
+    # "quora",
+    "scidocs",
+    "scifact",
+    "webis-touche2020",
+    "trec-covid",
+    "cqadupstack/android",
+    "cqadupstack/english",
+    "cqadupstack/gaming",
+    "cqadupstack/gis",
+    "cqadupstack/mathematica",
+    "cqadupstack/physics",
+    "cqadupstack/programmers",
+    "cqadupstack/stats",
+    "cqadupstack/tex",
+    "cqadupstack/unix",
+    "cqadupstack/webmasters",
+    "cqadupstack/wordpress"
+]
+
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
-    output_dir = "/home/aiscuser/scratch1/outputs/upma/16_beir-gpt-intent-substring-query-linker-with-ngame-loss-001"
+    output_dir = "/data/outputs/upma/16_beir-gpt-intent-substring-query-linker-with-ngame-loss-001"
 
     input_args = parse_args()
     extra_args = additional_args()
@@ -29,7 +58,19 @@ if __name__ == '__main__':
     mname = "sentence-transformers/msmarco-distilbert-cos-v5"
 
     if input_args.beir_mode:
-        raise NotImplementedError("BeIR inference must be implemented.")
+        if extra_args.use_task_specific_metadata:
+            meta_file = "document_intent_substring/simple/raw_data/label_intent.raw.csv"
+            save_file_name = "document-intent-substring_simple"
+            pred_dir_name = "cross_predictions/document-intent-substring_simple"
+        else:
+            meta_dir = "intent_substring/raw_data/"
+            meta_file = f"intent_substring/raw_data/intent.raw.csv"
+            save_file_name = "msmarco-intent-substring" 
+            pred_dir_name = "cross_predictions/intent"
+
+        linker_beir_inference(output_dir, input_args, mname, save_file_name=save_file_name, meta_file=meta_file, 
+                              pred_dir_name=pred_dir_name, use_task_specific_metadata=extra_args.use_task_specific_metadata, 
+                              datasets=DATASETS, eval_batch_size=1600)
     else:
         config_file = "/data/datasets/beir/experiments/00_beir-gpt-document-intent-substring/configs/simple-query_gpt-document-intent-substring.json"
 
