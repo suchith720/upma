@@ -63,7 +63,6 @@ if __name__ == '__main__':
             save_file_name = "document-intent-substring_simple"
             pred_dir_name = "cross_predictions/document-intent-substring_simple"
         else:
-            meta_dir = "intent_substring/raw_data/"
             meta_file = f"intent_substring/raw_data/intent.raw.csv"
             save_file_name = "msmarco-intent-substring" 
             pred_dir_name = "cross_predictions/intent"

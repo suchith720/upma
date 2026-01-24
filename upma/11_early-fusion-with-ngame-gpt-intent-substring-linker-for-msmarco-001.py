@@ -4,44 +4,13 @@
 __all__ = []
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 3
-import os
-# os.environ['CUDA_VISIBLE_DEVICES'] = "2,3"
-
-import torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
+import os, torch, json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
 
 from xcai.misc import *
 from xcai.basics import *
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 5
 os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
-
-DATASETS = [
-    "msmarco",
-    "climate-fever",
-    "dbpedia-entity",
-    "fever",
-    "fiqa",
-    "hotpotqa",
-    "nfcorpus",
-    "nq",
-    "quora",
-    "scidocs",
-    "scifact",
-    "webis-touche2020",
-    "trec-covid",
-    "cqadupstack/android",
-    "cqadupstack/english",
-    "cqadupstack/gaming",
-    "cqadupstack/gis",
-    "cqadupstack/mathematica",
-    "cqadupstack/physics",
-    "cqadupstack/programmers",
-    "cqadupstack/stats",
-    "cqadupstack/tex",
-    "cqadupstack/unix",
-    "cqadupstack/webmasters",
-    "cqadupstack/wordpress"
-]
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
@@ -55,23 +24,36 @@ if __name__ == '__main__':
     mname = "distilbert-base-uncased"
 
     if input_args.beir_mode:
-        linker_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-001"
+        # linker_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-001"
 
+        # if extra_args.use_task_specific_metadata:
+        #     # raw_dir_name = "cross_raw_data/document-substring_sq-substring"
+        #     # metric_dir_name = "cross_metrics/document-substring_sq-substring"
+        #     # pred_dir_name = "cross_predictions/document-substring_sq-substring"
+
+        #     raw_dir_name = "cross_raw_data/document-intent-substring_simple"
+        #     metric_dir_name = "cross_metrics/document-intent-substring_simple"
+        #     pred_dir_name = "cross_predictions/document-intent-substring_simple"
+        # else:
+        #     raw_dir_name = "cross_raw_data/all-intent" if extra_args.use_all else "raw_data"
+        #     metric_dir_name = "cross_metrics/all-intent" if extra_args.use_all else "metrics"
+        #     pred_dir_name = "cross_predictions/all-intent" if extra_args.use_all else "predictions"
+
+        linker_dir = f"/data/outputs/upma/16_beir-gpt-intent-substring-query-linker-with-ngame-loss-{input_args.expt_no:03d}/"
+        assert os.path.exists(linker_dir), linker_dir
+
+        linker_name = os.path.basename(linker_dir.strip("/"))
         if extra_args.use_task_specific_metadata:
-            # raw_dir_name = "cross_raw_data/document-substring_sq-substring"
-            # metric_dir_name = "cross_metrics/document-substring_sq-substring"
-            # pred_dir_name = "cross_predictions/document-substring_sq-substring"
-
             raw_dir_name = "cross_raw_data/document-intent-substring_simple"
-            metric_dir_name = "cross_metrics/document-intent-substring_simple"
-            pred_dir_name = "cross_predictions/document-intent-substring_simple"
+            metric_dir_name = f"cross_metrics/{linker_name}/document-intent-substring_simple"
+            pred_dir_name = f"cross_predictions/{linker_name}/document-intent-substring_simple"
         else:
-            raw_dir_name = "cross_raw_data/all-intent" if extra_args.use_all else "raw_data"
-            metric_dir_name = "cross_metrics/all-intent" if extra_args.use_all else "metrics"
-            pred_dir_name = "cross_predictions/all-intent" if extra_args.use_all else "predictions"
+            raw_dir_name = "cross_raw_data/intent"
+            metric_dir_name = "cross_metrics/{linker_name}/intent"
+            pred_dir_name = "cross_predictions/{linker_name}/intent"
 
         early_fusion_beir_inference(output_dir, input_args, mname, linker_dir=linker_dir, raw_dir_name=raw_dir_name, metric_dir_name=metric_dir_name, 
-                                    pred_dir_name=pred_dir_name, datasets=DATASETS)
+                                    pred_dir_name=pred_dir_name)
     else:
         config_file = (
             "configs/msmarco/intent_substring/data-ngame-gpt-intent-substring_lbl_ce-negatives-topk-05-linker_exact.json"
