@@ -77,10 +77,10 @@ if __name__ == "__main__":
     # meta_file = data_dir + "document_intent_substring/simple/raw_data/label_intent.raw.csv"
     # data_name, meta_name = "label", "intent"
 
-    data_meta_file = data_dir + "document_intent_substring/simple/intent_qry_X_Y.npz"
-    data_file = data_dir + "document_intent_substring/simple/raw_data/query.raw.csv"
-    meta_file = data_dir + "document_intent_substring/simple/raw_data/label_intent.raw.csv"
-    data_name, meta_name = "query", "intent"
+    data_meta_file = data_dir + "document_intent_substring/multihop/intent_qry_X_Y.npz"
+    data_file = data_dir + "document_intent_substring/multihop/raw_data/query.raw.csv"
+    meta_file = data_dir + "document_intent_substring/multihop/raw_data/label_intent.raw.csv"
+    data_name, meta_name = "multihop-query", "intent"
 
     save_dir = "/data/datasets/beir/experiments/00_beir-gpt-document-intent-substring/"
     
