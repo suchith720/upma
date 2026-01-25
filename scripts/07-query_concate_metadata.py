@@ -16,7 +16,7 @@ from xclib.utils.sparse import retain_topk
 
 
 def get_input_text(dataset:str, dset_type:str, pred_dir_name:str, raw_dir_name:str, meta_info:Optional[Dict]=None, meta_file:Optional[str]=None, 
-                   use_task_specific_metadata:Optional[bool]=False):
+        use_task_specific_metadata:Optional[bool]=False, sep_tok:Optional[str]=" [SEP] "):
     # Query information
     info_file = f"/data/datasets/beir/{dataset}/XC/raw_data/{dset_type}.raw.csv"
     data_info = Info.from_txt(info_file, info_column_names=["identifier", "input_text"])
@@ -42,7 +42,7 @@ def get_input_text(dataset:str, dset_type:str, pred_dir_name:str, raw_dir_name:s
     assert data_meta.shape[0] == len(data_info["identifier"])
     assert data_meta.shape[1] == len(meta_info["identifier"])
 
-    data_text = [txt+" [SEP] "+" [SEP] ".join(meta_info["input_text"][i] for i in row.indices) for txt,row in zip(data_info["input_text"],data_meta)]
+    data_text = [txt + sep_tok + sep_tok.join(meta_info["input_text"][i] for i in row.indices) for txt,row in zip(data_info["input_text"],data_meta)]
 
     # Save info
     info_file = f"{output_dir}/{raw_dir_name}/{dset_type}_{dataset}.raw.csv"
@@ -54,7 +54,7 @@ if __name__ == '__main__':
 
     ## MSMARCO metadata
 
-    use_task_specific_metadata, meta_file = False, None
+    # use_task_specific_metadata, meta_file = False, None
 
     # output_dir = "/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/"
     # info_file = "/data/datasets/beir/msmarco/XC/substring/raw_data/substring.raw.csv"
@@ -68,17 +68,17 @@ if __name__ == '__main__':
 
     # save_dir_name, raw_dir_name = "cross_predictions/all-intent", "cross_raw_data/all-intent"
 
-    output_dir = "/data/outputs/upma/16_beir-gpt-intent-substring-query-linker-with-ngame-loss-002/"
-    pred_dir_name, raw_dir_name = "cross_predictions/intent", "cross_raw_data/intent"
-    info_file = "/data/datasets/beir/msmarco/XC/intent_substring/raw_data/intent.raw.csv"
+    # output_dir = "/data/outputs/upma/16_beir-gpt-intent-substring-query-linker-with-ngame-loss-002/"
+    # pred_dir_name, raw_dir_name = "cross_predictions/intent", "cross_raw_data/intent"
+    # info_file = "/data/datasets/beir/msmarco/XC/intent_substring/raw_data/intent.raw.csv"
 
     # Metadata information
-    meta_info = Info.from_txt(info_file, info_column_names=["identifier", "input_text"])
+    # meta_info = Info.from_txt(info_file, info_column_names=["identifier", "input_text"])
 
 
     ## BeIR task specific metadata
 
-    # use_task_specific_metadata, meta_info = True, None
+    use_task_specific_metadata, meta_info = True, None
 
     # output_dir = "/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/"
     # save_dir_name, raw_dir_name = "cross_predictions/document-substring_sq-substring", "cross_raw_data/document-substring_sq-substring"
@@ -94,15 +94,15 @@ if __name__ == '__main__':
     # raw_dir_name = "cross_raw_data/document-intent-substring_simple"
     # meta_file = "document_intent_substring/simple/raw_data/label_intent.raw.csv"
 
-    # output_dir = "/data/outputs/upma/16_beir-gpt-intent-substring-query-linker-with-ngame-loss-001/"
-    # pred_dir_name = "cross_predictions/document-intent-substring_simple"
-    # raw_dir_name = "cross_raw_data/document-intent-substring_simple"
-    # meta_file = "document_intent_substring/simple/raw_data/label_intent.raw.csv"
+    output_dir = "/data/outputs/upma/16_beir-gpt-intent-substring-query-linker-with-ngame-loss-002/"
+    pred_dir_name = "cross_predictions/document-intent-substring_simple"
+    raw_dir_name = "cross_raw_data/document-intent-substring_simple"
+    meta_file = "document_intent_substring/simple/raw_data/label_intent.raw.csv"
 
     os.makedirs(f"{output_dir}/{raw_dir_name}", exist_ok=True)
     for dataset in tqdm(BEIR_DATASETS):
         get_input_text(dataset, "test", pred_dir_name, raw_dir_name, meta_info=meta_info, meta_file=meta_file,
-                       use_task_specific_metadata=use_task_specific_metadata)
+                       use_task_specific_metadata=use_task_specific_metadata, sep_tok=", ")
 
         # if dataset == "msmarco": 
         #     get_input_text(dataset, "train")
