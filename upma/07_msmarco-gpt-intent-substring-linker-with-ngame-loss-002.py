@@ -17,33 +17,6 @@ from xcai.sdata import SMainXCDataset, SXCDataset
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 5
 os.environ['WANDB_PROJECT'] = "01_upma-msmarco-gpt-concept-substring-linker"
 
-DATASETS = [
-    "climate-fever",
-    "dbpedia-entity",
-    "fever",
-    "fiqa",
-    "hotpotqa",
-    "nfcorpus",
-    "nq",
-    "quora",
-    "scidocs",
-    "scifact",
-    "webis-touche2020",
-    "trec-covid",
-    "cqadupstack/android",
-    "cqadupstack/english",
-    "cqadupstack/gaming",
-    "cqadupstack/gis",
-    "cqadupstack/mathematica",
-    "cqadupstack/physics",
-    "cqadupstack/programmers",
-    "cqadupstack/stats",
-    "cqadupstack/tex",
-    "cqadupstack/unix",
-    "cqadupstack/webmasters",
-    "cqadupstack/wordpress"
-]
-
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
     output_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002"
@@ -61,9 +34,15 @@ if __name__ == '__main__':
 
         linker_beir_inference(output_dir, input_args, mname, save_file_name=save_file_name, meta_file=meta_file, 
                               pred_dir_name=pred_dir_name, meta_sequence_length=128, get_label_predictions=True, datasets=DATASETS)
+
+    elif input_args.beir_metadata_mapping:
+        meta_file, save_file_name = "intent_substring/conflation_01/raw_data/intent.raw.csv", "msmarco-intent-substring-conflation-01"
+        pred_meta_file = "document_intent_substring/simple/raw_data/label_intent.raw.csv" 
+
+        linker_beir_inference(output_dir, input_args, mname, save_file_name=save_file_name, meta_file=meta_file, pred_meta_file=pred_meta_file, 
+                              meta_sequence_length=128, get_data_predictions=False, get_meta_predictions=True)
     else:
         config_file = "/data/datasets/beir/msmarco/XC/configs/data_gpt-intent-substring-conflation-01.json"
-
         train_dset, test_dset = load_linker_block("msmarco", config_file, input_args, extra_args)
 
         # lbl_intent = sp.load_npz("/data/datasets/beir/msmarco/XC/intent_substring/conflation_01/intent_lbl_X_Y.npz")
@@ -72,5 +51,5 @@ if __name__ == '__main__':
         # label_dset = SXCDataset(SMainXCDataset(data_info=lbl_info, data_lbl=lbl_intent, lbl_info=test_dset.data.lbl_info))
         label_dset = None
 
-        linker_run(output_dir, input_args, mname, test_dset, train_dset, label_dset=label_dset, normalize=False)
+        linker_run(output_dir, input_args, mname, test_dset, train_dset, label_dset=label_dset)
 
