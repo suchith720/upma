@@ -12,6 +12,8 @@ from sentence_transformers.cross_encoder.trainer import CrossEncoderTrainer
 from sentence_transformers.cross_encoder.training_args import CrossEncoderTrainingArguments
 from sentence_transformers.util import mine_hard_negatives
 
+from transformers import AutoTokenizer
+
 
 def load_raw_txt(fname:str, encoding:str='utf-8', sep:Optional[str]='->'):
     ids, raw = [], []
@@ -40,20 +42,6 @@ def read_raw_file(fname):
     return load_raw_file(fname)[1]
 
 
-def get_positive_dataset(config):
-    data_info, lbl_info = read_raw_file(config["data_info"]), read_raw_file(config["lbl_info"])
-    data_lbl = sp.load_npz(config["data_lbl"])
-
-    queries, docs, labels = [], [], []
-    for idx in tqdm(range(data_lbl.shape[0])):
-        indices = data_lbl[idx].indices
-        queries.append(data_info[idx]) 
-        docs.append([lbl_info[i] for i in indices])
-        labels.append([1] * len(indices))
-
-    return Dataset.from_dict({"query": queries, "positive": docs, "labels": labels})
-
-
 def _retain_topk(x, k=5):
     data, indices, indptr = [], [], [0]
     for i,j in tqdm(zip(x.indptr, x.indptr[1:]), total=x.shape[0]):
@@ -71,25 +59,57 @@ def _retain_topk(x, k=5):
     return mat
 
 
-def get_negative_dataset(config, k:Optional[int]=None):
-    data_info, lbl_info = read_raw_file(config["data_info"]), read_raw_file(config["neg_info"]) 
+def _get_metadata(indices, meta_info, tokz, num_toks=100):
+    n_toks, idx = 0, 0
+    meta_items = []
+    while n_toks < num_toks:
+        text = str(np.random.choice(meta_info[indices[idx]]))
+        n_toks += len(tokz.encode(text)[1:-1])
+        meta_items.append(text)
+        idx = (idx + 1)%len(indices)
+    return " [SEP] ".join(meta_items)
 
-    data_neg = sp.load_npz(config["data_neg"])
-    data_neg = data_neg if k is None else _retain_topk(data_neg, k=k)
+
+def _get_dataset(config, lbl_name, use_meta:Optional[bool]=False, lbl_topk:Optional[int]=None):
+    data_info, lbl_info = read_raw_file(config["data_info"]), read_raw_file(config[f"{lbl_name}_info"])
+
+    data_lbl = sp.load_npz(config[f"data_{lbl_name}"])
+    data_lbl = data_lbl if lbl_topk is None else _retain_topk(data_lbl, k=lbl_topk)
+
+    relevance = [1] if lbl_name == "lbl" else [0]
+
+    if use_meta:
+        tokz = AutoTokenizer.from_pretrained("microsoft/MiniLM-L12-H384-uncased")
+        meta_info = read_raw_file(config["lnk_meta"]["meta_info"])
+        data_meta = _retain_topk(sp.load_npz(config["lnk_meta"]["data_meta"]), k=5)
 
     queries, docs, labels = [], [], []
-    for idx in tqdm(range(data_neg.shape[0])):
-        indices = data_neg[idx].indices
+    for idx in tqdm(range(data_lbl.shape[0])):
+        indices = data_lbl[idx].indices
+
         queries.append(data_info[idx]) 
+        if use_meta: 
+            meta_text = " [SEP] ".join([meta_info[i] for i in data_meta[idx].indices])
+            queries[-1] = queries[-1] + " [SEP] " + meta_text
+
         docs.append([lbl_info[i] for i in indices])
-        labels.append([0] * len(indices))
+        labels.append(relevance * len(indices))
 
     return Dataset.from_dict({"query": queries, "positive": docs, "labels": labels})
 
 
-def get_eval_dataset(pos_dataset, pred_file, lbl_file):
+def get_positive_dataset(config, use_meta:Optional[bool]=False):
+    return _get_dataset(config, "lbl", use_meta=use_meta)
 
-    pred_lbl = _retain_topk(sp.load_npz(pred_file), k=50)
+def get_negative_dataset(config, use_meta:Optional[bool]=False, neg_k:Optional[int]=None):
+    return _get_dataset(config, "neg", use_meta=use_meta, lbl_topk=neg_k)
+
+
+def get_eval_dataset(pos_dataset, pred_file, lbl_file, topk:Optional[int]=None):
+
+    pred_lbl = sp.load_npz(pred_file)
+    pred_lbl = pred_lbl if topk is None else _retain_topk(pred_lbl, k=topk)
+
     lbl_info = pd.read_csv(lbl_file)["text"]
 
     assert len(pos_dataset) == pred_lbl.shape[0]
@@ -147,7 +167,7 @@ def _concatenate_datasets(pos_dataset, neg_dataset):
     dataset = []
     for i in tqdm(range(len(pos_dataset))):
         a,b = pos_dataset[i], neg_dataset[i]
-        assert a["query"] == b["query"]
+        assert a["query"].split(" [SEP] ")[0] == b["query"].split(" [SEP] ")[0]
         o = {
             "query": a["query"],
             "positive": a["positive"] + b["positive"],
@@ -158,8 +178,8 @@ def _concatenate_datasets(pos_dataset, neg_dataset):
     return Dataset.from_list(dataset)
         
 
-def main(do_inference:Optional[bool]=False):
-    output_dir = "/home/aiscuser/scratch1/outputs/upma/18_cross-encoder-training-ms-marco-lambda-hard-neg-002"
+def main(do_inference=False):
+    output_dir = "/data/outputs/upma/18_cross-encoder-training-ms-marco-lambda-hard-neg-006"
     pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
 
     model_name = "microsoft/MiniLM-L12-H384-uncased"
@@ -173,41 +193,39 @@ def main(do_inference:Optional[bool]=False):
     # train_batch_size and eval_batch_size inform the size of the batches, while mini_batch_size is used by the loss
     # to subdivide the batch into smaller parts. This mini_batch_size largely informs the training speed and memory usage.
     # Keep in mind that the loss does not process `train_batch_size` pairs, but `train_batch_size * num_docs` pairs.
-    train_batch_size = 64
-    eval_batch_size = 64
-    mini_batch_size = 64
+    train_batch_size = 8
+    eval_batch_size = 8
+    mini_batch_size = 8
     num_epochs = 1
     max_docs = None
-    num_negatives = 10
+    num_negatives = None
 
     dt = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
     # 1. Define our CrossEncoder model
     # Set the seed so the new classifier weights are identical in subsequent runs
     torch.manual_seed(12)
-    if do_inference:
-        mname = sorted(os.listdir(output_dir))[-1]
-        model = CrossEncoder(f"{output_dir}/{mname}/final")
-    else:
-        model = CrossEncoder(model_name, num_labels=1)
+
+    mname = sorted(os.listdir(output_dir))[-1]
+    model = CrossEncoder(f"{output_dir}/{mname}/final") if do_inference else CrossEncoder(model_name, num_labels=1)
+
     print("Model max length:", model.max_length)
     print("Model num labels:", model.num_labels)
 
     # 2. Load the MS MARCO dataset: https://huggingface.co/datasets/microsoft/ms_marco
-    config_key = "data_lbl_ngame-gpt-intent-substring-conflation-01_ce-negatives-topk-05-linker-label-intent-substring_exact"
-    config_file = f"configs/msmarco/intent_substring/{config_key}.json"
+    config_key = "data_lbl_gpt-category-linker_ce-negatives-topk-05_exact"
+    config_file = f"configs/msmarco/category/{config_key}.json"
     with open(config_file) as file:
         config = json.load(file)[config_key]["path"]
 
     pickle_file = f"{pickle_dir}/{os.path.basename(output_dir)}.joblib"
     if os.path.exists(pickle_file):
-        pos_dataset, neg_dataset, test_dataset, eval_dataset = joblib.load(pickle_file)
-        train_dataset = _concatenate_datasets(pos_dataset, neg_dataset)
+        train_dataset, test_dataset, eval_dataset = joblib.load(pickle_file)
     else:
-        pos_dataset = get_positive_dataset(config["train"])
+        pos_dataset = get_positive_dataset(config["train"], use_meta=True)
         logging.info(f"Created {len(pos_dataset):_} query-positive pairs")
 
-        neg_dataset = get_negative_dataset(config["train"], num_negatives)
+        neg_dataset = get_negative_dataset(config["train"], use_meta=False, neg_k=num_negatives)
         logging.info(f"Created {len(neg_dataset):_} query-negative pairs")
 
         # Concatenate the two datasets into one to  form training dataset
@@ -217,25 +235,14 @@ def main(do_inference:Optional[bool]=False):
         pred_file = "/data/outputs/upma/09_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-008/predictions/test_predictions_msmarco.npz"
         lbl_file = "/data/datasets/beir/msmarco/XC/raw_data/label.raw.csv"
 
-        test_dataset = get_positive_dataset(config["test"])
+        test_dataset = get_positive_dataset(config["test"], use_meta=True)
 
         eval_dataset = get_eval_dataset(test_dataset, pred_file, lbl_file)
 
-        joblib.dump((pos_dataset, neg_dataset, test_dataset, eval_dataset), pickle_file)
-
-    # 4. Define the evaluator. We use the CENanoBEIREvaluator, which is a light-weight evaluator for English reranking
-    if do_inference:
-        evaluator = CrossEncoderRerankingEvaluator(
-            samples=eval_dataset,
-            name="ms-marco-dev",
-            show_progress_bar=True,
-            always_rerank_positives=False,
-        )
-        results = evaluator(model)
-        print(results)
-        return
+        joblib.dump((train_dataset, test_dataset, eval_dataset), pickle_file)
 
     logging.info(train_dataset)
+
 
     # 3. Define our training loss
     loss = LambdaLoss(
@@ -243,6 +250,19 @@ def main(do_inference:Optional[bool]=False):
         weighting_scheme=NDCGLoss2PPScheme(),
         mini_batch_size=mini_batch_size,
     )
+
+    # 4. Define the evaluator. We use the CENanoBEIREvaluator, which is a light-weight evaluator for English reranking
+    evaluator = CrossEncoderRerankingEvaluator(
+        samples=eval_dataset,
+        name="ms-marco-dev",
+        show_progress_bar=True,
+        always_rerank_positives=False,
+    )
+
+    if do_inference:
+        results = evaluator(model)
+        print(results)
+        return
 
     # 5. Define the training arguments
     short_model_name = model_name if "/" not in model_name else model_name.split("/")[-1]
@@ -263,9 +283,9 @@ def main(do_inference:Optional[bool]=False):
         metric_for_best_model="ms-marco-dev_ndcg@10",
         # Optional tracking/debugging parameters:
         eval_strategy="steps",
-        eval_steps=500,
         save_strategy="steps",
-        save_steps=500,
+        eval_steps=1000,
+        save_steps=1000,
         save_total_limit=2,
         logging_steps=250,
         logging_first_step=True,
@@ -291,20 +311,27 @@ def main(do_inference:Optional[bool]=False):
     final_output_dir = f"{output_dir}/{run_name}_{dt}/final"
     model.save_pretrained(final_output_dir)
 
+
 def _inference(model, config, lbl_name):
     data_info, lbl_info = read_raw_file(config["data_info"]), read_raw_file(config[f"{lbl_name}_info"])
     data_lbl = sp.load_npz(config[f"data_{lbl_name}"])
 
+    meta_info = read_raw_file(config["lnk_meta"]["meta_info"])
+    data_meta = _retain_topk(sp.load_npz(config["lnk_meta"]["data_meta"]), k=5)
+
     model_input = [] 
     for idx in tqdm(range(data_lbl.shape[0])):
         indices = data_lbl[idx].indices
+
         query = data_info[idx]
+        meta_text = " [SEP] ".join([meta_info[i] for i in data_meta[idx].indices])
+        query = query + " [SEP] " + meta_text
+
         model_input.extend([[query, lbl_info[i]] for i in indices])
 
     scores = model.predict(model_input, batch_size=64, show_progress_bar=True, activation_fn=torch.nn.Identity())
 
     return sp.csr_matrix((scores, data_lbl.indices, data_lbl.indptr), dtype=data_lbl.dtype, shape=data_lbl.shape) 
-
 
 def get_positive_inference(model, config):
     return _inference(model, config, "lbl")
@@ -312,17 +339,16 @@ def get_positive_inference(model, config):
 def get_negative_inference(model, config):
     return _inference(model, config, "neg")
 
-
 def inference():
-    output_dir = "/home/aiscuser/scratch1/outputs/upma/18_cross-encoder-training-ms-marco-lambda-hard-neg-002"
+    output_dir = "/data/outputs/upma/18_cross-encoder-training-ms-marco-lambda-hard-neg-006"
 
     mname = sorted(os.listdir(output_dir))[-1]
     model = CrossEncoder(f"{output_dir}/{mname}/final")
     print("Model max length:", model.max_length)
     print("Model num labels:", model.num_labels)
 
-    config_key = "data_lbl_ngame-gpt-intent-substring-conflation-01_ce-negatives-topk-05-linker-label-intent-substring_exact"
-    config_file = f"configs/msmarco/intent_substring/{config_key}.json"
+    config_key = "data_lbl_gpt-category-linker_ce-negatives-topk-05_exact"
+    config_file = f"configs/msmarco/category/{config_key}.json"
     with open(config_file) as file:
         config = json.load(file)[config_key]["path"]
 

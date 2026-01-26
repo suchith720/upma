@@ -158,8 +158,8 @@ def _concatenate_datasets(pos_dataset, neg_dataset):
     return Dataset.from_list(dataset)
         
 
-def main(do_inference:Optional[bool]=False):
-    output_dir = "/home/aiscuser/scratch1/outputs/upma/18_cross-encoder-training-ms-marco-lambda-hard-neg-002"
+def main(do_inference=False):
+    output_dir = "/home/aiscuser/scratch1/outputs/upma/18_cross-encoder-training-ms-marco-lambda-hard-neg-003"
     pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
 
     model_name = "microsoft/MiniLM-L12-H384-uncased"
@@ -173,23 +173,24 @@ def main(do_inference:Optional[bool]=False):
     # train_batch_size and eval_batch_size inform the size of the batches, while mini_batch_size is used by the loss
     # to subdivide the batch into smaller parts. This mini_batch_size largely informs the training speed and memory usage.
     # Keep in mind that the loss does not process `train_batch_size` pairs, but `train_batch_size * num_docs` pairs.
-    train_batch_size = 64
-    eval_batch_size = 64
-    mini_batch_size = 64
+    train_batch_size = 16
+    eval_batch_size = 16
+    mini_batch_size = 16
     num_epochs = 1
     max_docs = None
-    num_negatives = 10
+    num_negatives = None
 
     dt = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
     # 1. Define our CrossEncoder model
     # Set the seed so the new classifier weights are identical in subsequent runs
     torch.manual_seed(12)
-    if do_inference:
-        mname = sorted(os.listdir(output_dir))[-1]
-        model = CrossEncoder(f"{output_dir}/{mname}/final")
-    else:
-        model = CrossEncoder(model_name, num_labels=1)
+
+    mname = sorted(os.listdir(output_dir))[-1]
+    mname = f"{output_dir}/{mname}/final/"
+
+    model = CrossEncoder(mname) if do_inference else CrossEncoder(model_name, num_labels=1)
+
     print("Model max length:", model.max_length)
     print("Model num labels:", model.num_labels)
 
@@ -201,8 +202,7 @@ def main(do_inference:Optional[bool]=False):
 
     pickle_file = f"{pickle_dir}/{os.path.basename(output_dir)}.joblib"
     if os.path.exists(pickle_file):
-        pos_dataset, neg_dataset, test_dataset, eval_dataset = joblib.load(pickle_file)
-        train_dataset = _concatenate_datasets(pos_dataset, neg_dataset)
+        train_dataset, test_dataset, eval_dataset = joblib.load(pickle_file)
     else:
         pos_dataset = get_positive_dataset(config["train"])
         logging.info(f"Created {len(pos_dataset):_} query-positive pairs")
@@ -221,21 +221,10 @@ def main(do_inference:Optional[bool]=False):
 
         eval_dataset = get_eval_dataset(test_dataset, pred_file, lbl_file)
 
-        joblib.dump((pos_dataset, neg_dataset, test_dataset, eval_dataset), pickle_file)
-
-    # 4. Define the evaluator. We use the CENanoBEIREvaluator, which is a light-weight evaluator for English reranking
-    if do_inference:
-        evaluator = CrossEncoderRerankingEvaluator(
-            samples=eval_dataset,
-            name="ms-marco-dev",
-            show_progress_bar=True,
-            always_rerank_positives=False,
-        )
-        results = evaluator(model)
-        print(results)
-        return
+        joblib.dump((train_dataset, test_dataset, eval_dataset), pickle_file)
 
     logging.info(train_dataset)
+
 
     # 3. Define our training loss
     loss = LambdaLoss(
@@ -243,6 +232,19 @@ def main(do_inference:Optional[bool]=False):
         weighting_scheme=NDCGLoss2PPScheme(),
         mini_batch_size=mini_batch_size,
     )
+
+    # 4. Define the evaluator. We use the CENanoBEIREvaluator, which is a light-weight evaluator for English reranking
+    evaluator = CrossEncoderRerankingEvaluator(
+        samples=eval_dataset,
+        name="ms-marco-dev",
+        show_progress_bar=True,
+        always_rerank_positives=False,
+    )
+
+    if do_inference:
+        results = evaluator(model)
+        print(results)
+        return
 
     # 5. Define the training arguments
     short_model_name = model_name if "/" not in model_name else model_name.split("/")[-1]
@@ -291,6 +293,7 @@ def main(do_inference:Optional[bool]=False):
     final_output_dir = f"{output_dir}/{run_name}_{dt}/final"
     model.save_pretrained(final_output_dir)
 
+
 def _inference(model, config, lbl_name):
     data_info, lbl_info = read_raw_file(config["data_info"]), read_raw_file(config[f"{lbl_name}_info"])
     data_lbl = sp.load_npz(config[f"data_{lbl_name}"])
@@ -305,16 +308,14 @@ def _inference(model, config, lbl_name):
 
     return sp.csr_matrix((scores, data_lbl.indices, data_lbl.indptr), dtype=data_lbl.dtype, shape=data_lbl.shape) 
 
-
 def get_positive_inference(model, config):
     return _inference(model, config, "lbl")
 
 def get_negative_inference(model, config):
     return _inference(model, config, "neg")
 
-
 def inference():
-    output_dir = "/home/aiscuser/scratch1/outputs/upma/18_cross-encoder-training-ms-marco-lambda-hard-neg-002"
+    output_dir = "/data/outputs/upma/18_cross-encoder-training-ms-marco-lambda-hard-neg-003"
 
     mname = sorted(os.listdir(output_dir))[-1]
     model = CrossEncoder(f"{output_dir}/{mname}/final")
