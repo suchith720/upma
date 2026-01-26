@@ -54,7 +54,7 @@ if __name__ == '__main__':
 
     ## MSMARCO metadata
 
-    # use_task_specific_metadata, meta_file = False, None
+    use_task_specific_metadata, meta_file = False, None
 
     # output_dir = "/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/"
     # info_file = "/data/datasets/beir/msmarco/XC/substring/raw_data/substring.raw.csv"
@@ -68,17 +68,17 @@ if __name__ == '__main__':
 
     # save_dir_name, raw_dir_name = "cross_predictions/all-intent", "cross_raw_data/all-intent"
 
-    # output_dir = "/data/outputs/upma/16_beir-gpt-intent-substring-query-linker-with-ngame-loss-002/"
-    # pred_dir_name, raw_dir_name = "cross_predictions/intent", "cross_raw_data/intent"
-    # info_file = "/data/datasets/beir/msmarco/XC/intent_substring/raw_data/intent.raw.csv"
+    output_dir = "/data/outputs/upma/16_beir-gpt-intent-substring-query-linker-with-ngame-loss-001/"
+    pred_dir_name, raw_dir_name = "cross_predictions/intent", "cross_raw_data/intent"
+    info_file = "/data/datasets/beir/msmarco/XC/intent_substring/raw_data/intent.raw.csv"
 
     # Metadata information
-    # meta_info = Info.from_txt(info_file, info_column_names=["identifier", "input_text"])
+    meta_info = Info.from_txt(info_file, info_column_names=["identifier", "input_text"])
 
 
     ## BeIR task specific metadata
 
-    use_task_specific_metadata, meta_info = True, None
+    # use_task_specific_metadata, meta_info = True, None
 
     # output_dir = "/data/outputs/upma/00_msmarco-gpt-concept-substring-linker-with-ngame-loss-001/"
     # save_dir_name, raw_dir_name = "cross_predictions/document-substring_sq-substring", "cross_raw_data/document-substring_sq-substring"
@@ -94,10 +94,10 @@ if __name__ == '__main__':
     # raw_dir_name = "cross_raw_data/document-intent-substring_simple"
     # meta_file = "document_intent_substring/simple/raw_data/label_intent.raw.csv"
 
-    output_dir = "/data/outputs/upma/16_beir-gpt-intent-substring-query-linker-with-ngame-loss-002/"
-    pred_dir_name = "cross_predictions/document-intent-substring_simple"
-    raw_dir_name = "cross_raw_data/document-intent-substring_simple"
-    meta_file = "document_intent_substring/simple/raw_data/label_intent.raw.csv"
+    # output_dir = "/data/outputs/upma/16_beir-gpt-intent-substring-query-linker-with-ngame-loss-002/"
+    # pred_dir_name = "cross_predictions/document-intent-substring_simple"
+    # raw_dir_name = "cross_raw_data/document-intent-substring_simple"
+    # meta_file = "document_intent_substring/simple/raw_data/label_intent.raw.csv"
 
     os.makedirs(f"{output_dir}/{raw_dir_name}", exist_ok=True)
     for dataset in tqdm(BEIR_DATASETS):
