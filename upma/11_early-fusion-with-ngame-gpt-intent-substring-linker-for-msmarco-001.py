@@ -5,9 +5,12 @@ __all__ = []
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 3
 import os, torch, json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
+from typing import Optional
 
 from xcai.misc import *
 from xcai.basics import *
+
+import xcai.misc
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 5
 os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
@@ -55,7 +58,7 @@ if __name__ == '__main__':
             pred_dir_name = f"cross_predictions/{linker_name}/intent"
 
         early_fusion_beir_inference(output_dir, input_args, mname, linker_dir=linker_dir, raw_dir_name=raw_dir_name, metric_dir_name=metric_dir_name, 
-                                    pred_dir_name=pred_dir_name)
+                                    pred_dir_name=pred_dir_name, eval_batch_size=2400, datasets=["msmarco"])
     else:
         config_file = (
             "configs/msmarco/intent_substring/data-ngame-gpt-intent-substring_lbl_ce-negatives-topk-05-linker_exact.json"
