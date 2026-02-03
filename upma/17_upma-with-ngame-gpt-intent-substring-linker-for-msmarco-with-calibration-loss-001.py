@@ -12,6 +12,36 @@ from xcai.basics import *
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 4
 os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
 
+DATASETS = [
+    # "arguana",
+    # "msmarco",
+    # "climate-fever",
+    # "dbpedia-entity",
+    # "fever",
+    # "fiqa",
+    # "hotpotqa",
+    # "nfcorpus",
+    # "nq",
+    "quora",
+    "scidocs",
+    "scifact",
+    "webis-touche2020",
+    "trec-covid",
+    "cqadupstack/android",
+    "cqadupstack/english",
+    "cqadupstack/gaming",
+    "cqadupstack/gis",
+    "cqadupstack/mathematica",
+    "cqadupstack/physics",
+    "cqadupstack/programmers",
+    "cqadupstack/stats",
+    "cqadupstack/tex",
+    "cqadupstack/unix",
+    "cqadupstack/webmasters",
+    "cqadupstack/wordpress"
+]
+
+
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 21
 if __name__ == '__main__':
     input_args = parse_args()
@@ -28,15 +58,23 @@ if __name__ == '__main__':
         input_args.pickle_dir = "/data/datasets/processed/upma"
 
         meta_file = "/data/datasets/beir/msmarco/XC/intent_substring/conflation_01/raw_data/intent.raw.csv"
-        linker_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002/predictions/"
 
-        update_config_during_inference, use_data_memory = True, False
-        metric_dir_name, pred_dir_name = "cross_metrics/no-memory", "cross_predictions/no-memory"
+        # linker_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002/predictions/"
+        # update_config_during_inference, use_data_memory = False, True
+        # metric_dir_name, pred_dir_name = "metrics", "predictions"
+
+        # update_config_during_inference, use_data_memory = True, False
+        # metric_dir_name, pred_dir_name = "cross_metrics/no-memory", "cross_predictions/no-memory"
+
+        linker_dir = "/data/outputs/upma/16_beir-gpt-intent-substring-query-linker-with-ngame-loss-001/cross_predictions/intent-conflation-01/"
+        update_config_during_inference, use_data_memory = False, True
+        metric_dir_name = "cross_metrics/16_beir-gpt-intent-substring-query-linker-with-ngame-loss-001/intent-conflation-01" 
+        pred_dir_name = "cross_predictions/16_beir-gpt-intent-substring-query-linker-with-ngame-loss-001/intent-conflation-01"
 
         upma_beir_inference(output_dir, input_args, mname, "memory/msmarco-intent-substring-conflation-01", meta_file, linker_dir, eval_batch_size=800, 
                             data_repr_pooling=False, memory_injection_layer=memory_injection_layer, use_calib_loss=True, calib_loss_weight=0.1, 
                             use_data_memory=use_data_memory, metric_dir_name=metric_dir_name, pred_dir_name=pred_dir_name, 
-                            update_config_during_inference=update_config_during_inference)
+                            update_config_during_inference=update_config_during_inference, datasets=DATASETS)
     else:
         config_file = (
             "configs/msmarco/intent_substring/data_lbl_ngame-gpt-intent-substring-conflation-01_ce-negatives-topk-05-linker_exact.json"

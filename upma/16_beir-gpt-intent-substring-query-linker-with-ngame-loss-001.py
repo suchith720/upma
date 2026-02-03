@@ -63,13 +63,17 @@ if __name__ == '__main__':
             save_file_name = "document-intent-substring_simple"
             pred_dir_name = "cross_predictions/document-intent-substring_simple"
         else:
-            meta_file = f"intent_substring/raw_data/intent.raw.csv"
-            save_file_name = "msmarco-intent-substring" 
-            pred_dir_name = "cross_predictions/intent"
+            # meta_file = f"intent_substring/raw_data/intent.raw.csv"
+            # save_file_name = "msmarco-intent-substring" 
+            # pred_dir_name = "cross_predictions/intent"
+
+            meta_file = f"intent_substring/conflation_01/raw_data/intent.raw.csv"
+            save_file_name = "msmarco-intent-conflation-01-substring" 
+            pred_dir_name = "cross_predictions/intent-conflation-01"
 
         linker_beir_inference(output_dir, input_args, mname, save_file_name=save_file_name, meta_file=meta_file, 
                               pred_dir_name=pred_dir_name, use_task_specific_metadata=extra_args.use_task_specific_metadata, 
-                              datasets=DATASETS, eval_batch_size=1600, model_type="last")
+                              datasets=["quora"], eval_batch_size=1600, model_type="last", meta_sequence_length=128)
     else:
         config_file = "/data/datasets/beir/experiments/00_beir-gpt-document-intent-substring/configs/simple-query_gpt-document-intent-substring.json"
 

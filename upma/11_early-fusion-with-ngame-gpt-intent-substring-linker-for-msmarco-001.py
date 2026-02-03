@@ -10,10 +10,91 @@ from typing import Optional
 from xcai.misc import *
 from xcai.basics import *
 
-import xcai.misc
+from typing import Optional, Union, Callable, List
+from xcai.models.PPP0XX import DBT023, DBTConfig
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 5
 os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
+
+
+def early_fusion_run(output_dir:str, input_args:argparse.ArgumentParser, mname:str, test_dset:Union[XCDataset, SXCDataset],
+                     train_dset:Optional[Union[XCDataset, SXCDataset]]=None, collator:Optional[Callable]=identity_collate_fn, 
+                     save_dir_name:Optional[str]=None, eval_batch_size:Optional[int]=1600):
+
+    args = XCLearningArguments(
+        output_dir=output_dir,
+        logging_first_step=True,
+        per_device_train_batch_size=128,
+        per_device_eval_batch_size=eval_batch_size,
+        representation_num_beams=200,
+        representation_accumulation_steps=10,
+        save_strategy="steps",
+        eval_strategy="steps",
+        eval_steps=5000,
+        save_steps=5000,
+        save_total_limit=5,
+        num_train_epochs=50,
+        predict_with_representation=True,
+        representation_search_type='BRUTEFORCE',
+        search_normalize=False,
+
+        adam_epsilon=1e-6,
+        warmup_steps=1000,
+        weight_decay=0.01,
+        learning_rate=6e-5,
+        label_names=['plbl2data_idx', 'plbl2data_data2ptr'],
+
+        group_by_cluster=True,
+        num_clustering_warmup_epochs=10,
+        num_cluster_update_epochs=5,
+        num_cluster_size_update_epochs=25,
+        clustering_type='EXPO',
+        minimum_cluster_size=2,
+        maximum_cluster_size=1600,
+
+        metric_for_best_model='P@1',
+        load_best_model_at_end=True,
+        target_indices_key='plbl2data_idx',
+        target_pointer_key='plbl2data_data2ptr',
+
+        use_encoder_parallel=True,
+        max_grad_norm=None,
+        fp16=True,
+
+        use_cpu_for_searching=True,
+        use_cpu_for_clustering=True,
+    )
+
+    config = DBTConfig(
+        normalize = False,
+        use_layer_norm = False,
+        use_encoder_parallel = True,
+    )
+
+    def model_fn(mname, config):
+        return DBT023.from_pretrained(mname, config=config)
+
+    do_inference = check_inference_mode(input_args)
+    model = load_model(args.output_dir, model_fn, {"mname": mname, "config": config}, do_inference=do_inference,
+                       use_pretrained=input_args.use_pretrained)
+
+    metric = PrecReclMrr(test_dset.data.n_lbl, test_dset.data.data_lbl_filterer, prop=None if train_dset is None else train_dset.data.data_lbl,
+                         pk=10, rk=200, rep_pk=[1, 3, 5, 10], rep_rk=[10, 100, 200], mk=[5, 10, 20])
+
+    learn = XCLearner(
+        model=model,
+        args=args,
+        train_dataset=train_dset,
+        eval_dataset=test_dset,
+        data_collator=collator,
+        compute_metrics=metric,
+    )
+
+    test_dset = SXCDataset(SMainXCDataset(data_info=data_info, lbl_info=test_dset.data.lbl_info))
+    lbl_repr = learn._get_lbl_representation(test_dset, to_cpu=True)
+
+    torch.save(lbl_repr, f"{output_dir}/dummy/label_repr.pth")
+
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
@@ -60,12 +141,22 @@ if __name__ == '__main__':
         early_fusion_beir_inference(output_dir, input_args, mname, linker_dir=linker_dir, raw_dir_name=raw_dir_name, metric_dir_name=metric_dir_name, 
                                     pred_dir_name=pred_dir_name, eval_batch_size=2400, datasets=["msmarco"])
     else:
-        config_file = (
-            "configs/msmarco/intent_substring/data-ngame-gpt-intent-substring_lbl_ce-negatives-topk-05-linker_exact.json"
-            if input_args.exact else
-            "configs/msmarco/intent_substring/data-ngame-gpt-intent-substring_lbl.json"
-        )
+        # config_file = (
+        #     "configs/msmarco/intent_substring/data-ngame-gpt-intent-substring_lbl_ce-negatives-topk-05-linker_exact.json"
+        #     if input_args.exact else
+        #     "configs/msmarco/intent_substring/data-ngame-gpt-intent-substring_lbl.json"
+        # )
+        # train_dset, test_dset = load_early_fusion_block("msmarco", config_file, input_args)
+        # early_fusion_run(output_dir, input_args, mname, test_dset, train_dset)
+
+        input_args.pickle_dir = "/data/datasets/processed/upma/"
+        data_dir = "/home/aiscuser/scratch1/dummy/"
+
+        data_name = "test"
+        data_info = load_info(f"{data_dir}/{data_name}.joblib", f"{data_dir}/{data_name}.raw.txt", mname, sequence_length=128)
+
+        config_file = f"/data/datasets/beir/msmarco/XC/configs/data.json"
         train_dset, test_dset = load_early_fusion_block("msmarco", config_file, input_args)
         
         early_fusion_run(output_dir, input_args, mname, test_dset, train_dset)
-        
+
