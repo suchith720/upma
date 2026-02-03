@@ -5,6 +5,37 @@ from tqdm.auto import tqdm
 from xcai.misc import BEIR_DATASETS
 from xclib.utils.sparse import retain_topk
 
+
+DATASETS = [
+    # "arguana",
+    # "msmarco",
+    # "climate-fever",
+    # "dbpedia-entity",
+    # "fever",
+    # "fiqa",
+    # "hotpotqa",
+    # "nfcorpus",
+    # "nq",
+    # "quora",
+    # "scidocs",
+    # "scifact",
+    # "webis-touche2020",
+    # "trec-covid",
+    "cqadupstack/android",
+    "cqadupstack/english",
+    "cqadupstack/gaming",
+    "cqadupstack/gis",
+    "cqadupstack/mathematica",
+    "cqadupstack/physics",
+    "cqadupstack/programmers",
+    "cqadupstack/stats",
+    "cqadupstack/tex",
+    "cqadupstack/unix",
+    "cqadupstack/webmasters",
+    "cqadupstack/wordpress"
+]
+
+
 def multiply_matrix(a:sp.csr_matrix, b:sp.csr_matrix, batch_size=1000):
     output = []
     for i in tqdm(range(0, a.shape[0], batch_size)):
@@ -29,8 +60,9 @@ if __name__ == "__main__":
     )
     os.makedirs(save_dir, exist_ok=True)
 
-    for dataset in tqdm(BEIR_DATASETS):
+    for dataset in tqdm(DATASETS):
         print(dataset)
+        dataset = dataset.replace("/", "-")
 
         data_beir_file = f"{data_beir_dir}/test_predictions_{dataset}.npz"
         beir_msmarco_file = f"{beir_msmarco_dir}/document-intent-substring-simple-label-intent_predictions_{dataset}.npz"
