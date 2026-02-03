@@ -19,7 +19,7 @@ os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
 if __name__ == '__main__':
     input_args = parse_args()
 
-    output_dir = "/home/aiscuser/scratch1/outputs/upma/19_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-with-different-teachers-003"
+    output_dir = "/data/outputs/upma/19_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-with-different-teachers-003"
 
     input_args.use_sxc_sampler = True
     input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
@@ -28,8 +28,10 @@ if __name__ == '__main__':
     memory_injection_layer = 3
 
     if input_args.beir_mode:
+        input_args.pickle_dir = "/data/datasets/processed/upma"
+
         meta_file = "/data/datasets/beir/msmarco/XC/intent_substring/conflation_01/raw_data/intent.raw.csv"
-        linker_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002/"
+        linker_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002/predictions/"
         upma_beir_inference(output_dir, input_args, mname, "msmarco-intent-substring-conflation-01", meta_file, linker_dir, eval_batch_size=400, 
                             data_repr_pooling=False, memory_injection_layer=memory_injection_layer, use_calib_loss=True, calib_loss_weight=0.1)
     else:
