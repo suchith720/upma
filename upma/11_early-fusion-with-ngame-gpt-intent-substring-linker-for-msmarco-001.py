@@ -66,5 +66,6 @@ if __name__ == '__main__':
             "configs/msmarco/intent_substring/data-ngame-gpt-intent-substring_lbl.json"
         )
         train_dset, test_dset = load_early_fusion_block("msmarco", config_file, input_args)
+        
         early_fusion_run(output_dir, input_args, mname, test_dset, train_dset)
-
+        
