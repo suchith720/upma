@@ -2,22 +2,22 @@
     "data_lbl_ngame-gpt-intent-substring-conflation-01": {
         "path": {
             "train": {
-                "data_lbl": "/data/datasets/beir/msmarco/XC/trn_X_Y.npz",
-                "data_info": "/data/datasets/beir/msmarco/XC/raw_data/train.raw.txt",
-                "lbl_info": "/data/datasets/beir/msmarco/XC/raw_data/label.raw.txt",
+                "data_lbl": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/trn_X_Y.npz",
+                "data_info": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/raw_data/train.raw.txt",
+                "lbl_info": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/raw_data/label.raw.txt",
                 "lnk_meta": {
                     "prefix": "lnk",
-                    "data_meta": "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002/predictions/train_predictions.npz",
-                    "meta_info": "/data/datasets/beir/msmarco/XC/intent_substring/conflation_01/raw_data/intent.raw.csv"
+                    "data_meta": "/home/sasokan/b-sprabhu/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002/predictions/train_predictions.npz",
+                    "meta_info": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/intent_substring/conflation_01/raw_data/intent.raw.csv"
                 }
             },
             "test": {
-                "data_lbl": "/data/datasets/beir/msmarco/XC/tst_X_Y.npz",
-                "data_info": "/data/datasets/beir/msmarco/XC/raw_data/test.raw.txt",
+                "data_lbl": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/tst_X_Y.npz",
+                "data_info": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/raw_data/test.raw.txt",
                 "lnk_meta": {
                     "prefix": "lnk",
-                    "data_meta": "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002/predictions/test_predictions.npz",
-                    "meta_info": "/data/datasets/beir/msmarco/XC/intent_substring/conflation_01/raw_data/intent.raw.csv"
+                    "data_meta": "/home/sasokan/b-sprabhu/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002/predictions/test_predictions.npz",
+                    "meta_info": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/intent_substring/conflation_01/raw_data/intent.raw.csv"
                 }
             }
         },
