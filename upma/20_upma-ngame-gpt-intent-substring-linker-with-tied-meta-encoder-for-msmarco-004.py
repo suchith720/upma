@@ -29,12 +29,11 @@ def get_shuffled_matrix(data_meta, seed=100):
 
 
 def insert_shuffled_meta_items(dset, seed=100):
-    np.random.seed(seed)
     data_meta = get_shuffled_matrix(dset.meta["lnk_meta"].data_meta, seed=seed)
     dset.meta["lnk_meta"].update_meta_matrix(data_meta)
 
 
-def get_random_matrix(n_data:int, n_meta:int, num_meta:Optional[int]=5, seed=100):
+def get_random_matrix(n_data:int, n_meta:int, num_meta:Optional[int]=5, seed:Optional[int]=100):
     np.random.seed(seed)
     data, indices, indptr = [], [], [0]
     for _ in range(n_data):
@@ -151,7 +150,7 @@ if __name__ == '__main__':
     input_args = parse_args()
     extra_args = additional_args()
 
-    output_dir = "/home/sasokan/suchith/outputs/upma/20_upma-ngame-gpt-intent-substring-linker-with-tied-meta-encoder-for-msmarco-001"
+    output_dir = "/home/sasokan/suchith/outputs/upma/20_upma-ngame-gpt-intent-substring-linker-with-tied-meta-encoder-for-msmarco-004"
 
     input_args.use_sxc_sampler = True
     input_args.pickle_dir = "/data/suchith/datasets/processed/"
@@ -161,7 +160,13 @@ if __name__ == '__main__':
     memory_type = "encoder"
 
     tie_memory_encoder_weights = True
-    exclude_module_from_tying = "2.output_layer_norm"
+    exclude_module_from_tying = None
+
+    # start analysis
+
+    extra_args.analysis_type = "constant"
+
+    # end analysis
 
     if input_args.beir_mode:
         meta_file = "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/intent_substring/conflation_01/raw_data/intent.raw.csv"
@@ -172,24 +177,12 @@ if __name__ == '__main__':
 
         analysis_type = extra_args.analysis_type 
 
-        if analysis_type == "no_memory":
-            use_data_memory, update_config_during_inference = False, True
-        else:
-            use_data_memory, update_config_during_inference = True, False
-
-        ## datasets = ["arguana", "nfcorpus", "scidocs", "scifact"]
-
-        metric_dir_name = None if analysis_type is None else f"cross_metrics/{analysis_type}"
-        pred_dir_name = None if analysis_type is None else f"cross_predictions/{analysis_type}"
-
         # end analysis
 
         upma_beir_inference(output_dir, input_args, mname, "msmarco-intent-substring-conflation-01", meta_file, linker_dir, data_dir, 
                             eval_batch_size=400, data_repr_pooling=False, memory_injection_layer=memory_injection_layer, memory_type=memory_type, 
                             n_memory_layers=n_memory_layers, tie_memory_encoder_weights=tie_memory_encoder_weights, 
-                            exclude_module_from_tying=exclude_module_from_tying, use_data_memory=use_data_memory, 
-                            update_config_during_inference=update_config_during_inference, # datasets=datasets, 
-                            analysis_type=analysis_type, metric_dir_name=metric_dir_name, pred_dir_name=pred_dir_name)
+                            exclude_module_from_tying=exclude_module_from_tying, analysis_type=analysis_type)
     else:
         config_file = (
             "configs/msmarco/intent_substring/data_lbl_ngame-gpt-intent-substring-conflation-01_ce-negatives-topk-05-linker_exact.json"
@@ -200,15 +193,25 @@ if __name__ == '__main__':
 
         # start analysis
 
-        use_data_memory, update_config_during_inference = True, False
+        analysis_type = extra_args.analysis_type
+        use_data_memory = False if extra_args.analysis_type == "no_memory" else True
 
-        constant_meta_items(train_dset)
-        constant_meta_items(test_dset)
+        if analysis_type == "random":
+            insert_random_meta_items(train_dset)
+            insert_random_meta_items(test_dset)
+        elif analysis_type == "constant":
+            insert_constant_meta_items(train_dset)
+            insert_constant_meta_items(test_dset)
+        elif analysis_type == "shuffle":
+            insert_shuffled_meta_items(train_dset)
+            insert_shuffled_meta_items(test_dset)
+
+        breakpoint()
 
         # end analysis
 
         upma_run(output_dir, input_args, mname, test_dset, train_dset, train_batch_size=128, data_repr_pooling=False, 
                  memory_injection_layer=memory_injection_layer, memory_type=memory_type, n_memory_layers=n_memory_layers, 
                  tie_memory_encoder_weights=tie_memory_encoder_weights, exclude_module_from_tying=exclude_module_from_tying, 
-                 resume_from_checkpoint=False, use_data_memory=use_data_memory, update_config_during_inference=update_config_during_inference)
+                 resume_from_checkpoint=False, use_data_memory=use_data_memory)
 

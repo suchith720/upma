@@ -29,11 +29,14 @@ if __name__ == '__main__':
     exclude_module_from_tying = None 
 
     if input_args.beir_mode:
-        meta_file = "/data/datasets/beir/msmarco/XC/intent_substring/conflation_01/raw_data/intent.raw.csv"
-        linker_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002/"
-        upma_beir_inference(output_dir, input_args, mname, "msmarco-intent-substring-conflation-01", meta_file, linker_dir, eval_batch_size=400, 
-                            data_repr_pooling=False, memory_injection_layer=memory_injection_layer, memory_type=memory_type, 
-                            n_memory_layers=n_memory_layers)
+        meta_file = "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/intent_substring/conflation_01/raw_data/intent.raw.csv"
+        linker_dir = "/home/sasokan/b-sprabhu/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002/predictions/"
+        data_dir = "/home/sasokan/b-sprabhu/"
+
+        upma_beir_inference(output_dir, input_args, mname, "msmarco-intent-substring-conflation-01", meta_file, linker_dir, data_dir=data_dir, 
+                            eval_batch_size=400, data_repr_pooling=False, memory_injection_layer=memory_injection_layer, memory_type=memory_type, 
+                            n_memory_layers=n_memory_layers, tie_memory_encoder_weights=tie_memory_encoder_weights, 
+                            exclude_module_from_tying=exclude_module_from_tying)
     else:
         config_file = (
             "configs/msmarco/intent_substring/data_lbl_ngame-gpt-intent-substring-conflation-01_ce-negatives-topk-05-linker_exact.json"
@@ -44,5 +47,6 @@ if __name__ == '__main__':
 
         upma_run(output_dir, input_args, mname, test_dset, train_dset, train_batch_size=128, data_repr_pooling=False, 
                  memory_injection_layer=memory_injection_layer, memory_type=memory_type, n_memory_layers=n_memory_layers, 
-                 tie_memory_encoder_weights=tie_memory_encoder_weights, exclude_module_from_tying=exclude_module_from_tying)
+                 tie_memory_encoder_weights=tie_memory_encoder_weights, exclude_module_from_tying=exclude_module_from_tying,
+                 resume_from_checkpoint=False)
 
