@@ -17,23 +17,34 @@ from xcai.sdata import SMainXCDataset, SXCDataset
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 5
 os.environ['WANDB_PROJECT'] = "01_upma-msmarco-gpt-concept-substring-linker"
 
+DATASETS = [
+    "trecdl19",
+    "trecdl20",
+]
+
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
-    output_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002"
+    # output_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002"
+    output_dir = "/home/sasokan/b-sprabhu/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002"
 
     input_args = parse_args()
     extra_args = additional_args()
 
     input_args.use_sxc_sampler = True
-    input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
+    # input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
+    input_args.pickle_dir = "/data/suchith/datasets/processed/"
+
     mname = "sentence-transformers/msmarco-distilbert-cos-v5"
 
     if input_args.beir_mode:
         meta_dir, save_file_name, pred_dir_name = "intent_substring/conflation_01/raw_data/", "msmarco-intent-substring-conflation-01", "predictions"
         meta_file = f"{meta_dir}/intent.raw.csv"
 
+        # linker_beir_inference(output_dir, input_args, mname, save_file_name=save_file_name, meta_file=meta_file, 
+        #                       pred_dir_name=pred_dir_name, meta_sequence_length=128, get_label_predictions=True, datasets=DATASETS)
+
         linker_beir_inference(output_dir, input_args, mname, save_file_name=save_file_name, meta_file=meta_file, 
-                              pred_dir_name=pred_dir_name, meta_sequence_length=128, get_label_predictions=True, datasets=DATASETS)
+                              pred_dir_name=pred_dir_name, meta_sequence_length=128, datasets=DATASETS)
 
     elif input_args.beir_metadata_mapping:
         meta_file, save_file_name = "intent_substring/conflation_01/raw_data/intent.raw.csv", "msmarco-intent-substring-conflation-01"
