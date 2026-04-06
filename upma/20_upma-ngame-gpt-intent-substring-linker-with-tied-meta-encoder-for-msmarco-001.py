@@ -5,6 +5,7 @@ __all__ = []
 
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 2
 import os, torch, json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
+from torch.utils.data import DataLoader
 
 from xcai.misc import *
 from xcai.basics import *
@@ -17,7 +18,9 @@ os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
 from tqdm.auto import tqdm
 from typing import Optional, List, Union
 from xclib.utils.sparse import retain_topk
+
 from xcai.sdata import SXCDataset, SMetaXCDataset
+from xcai.models.upma import UPA000, UPMAConfig
 
 
 def get_shuffled_matrix(data_meta, seed=100):
@@ -139,9 +142,118 @@ def upma_beir_inference(output_dir:str, input_args:argparse.ArgumentParser, mnam
     collate_beir_metrics(metric_dir)
 
 
+def attention_score_analysis(output_dir:str, input_args:argparse.ArgumentParser, mname:str, meta_save_fname:str, 
+                             meta_file:str, linker_dir:str, data_dir:Optional[str]=None, n_data_lnk_samples:Optional[int]=5, n_lbl_lnk_samples:Optional[int]=5, 
+                             data_lnk_topk:Optional[int]=5, lbl_lnk_topk:Optional[int]=5, eval_batch_size:Optional[int]=400, 
+                             datasets:Optional[List]=None, data_repr_pooling:Optional[bool]=True, memory_injection_layer:Optional[Union[int, List]]=6, 
+                             memory_type:Optional[Union[str, List]]="embeddings", n_memory_layers:Optional[int]=3, use_data_memory:Optional[bool]=True,
+                             use_label_memory:Optional[bool]=False, num_input_metadata:Optional[int]=5, use_calib_loss:Optional[bool]=False, 
+                             calib_loss_weight:Optional[float]=0.1, metric_dir_name:Optional[str]="metrics", pred_dir_name:Optional[str]=None, 
+                             update_config_during_inference:Optional[bool]=False, tie_memory_encoder_weights:Optional[bool]=False, 
+                             exclude_module_from_tying:Optional[str]=None, analysis_type:Optional[str]=None):
+    
+    metric_dir = f"{output_dir}/{metric_dir_name}"
+    os.makedirs(metric_dir, exist_ok=True)
+
+    input_args.only_test = input_args.do_test_inference = input_args.save_test_prediction = True
+    
+    meta_info = load_info(f"{input_args.pickle_dir}/{meta_save_fname}.joblib", meta_file, mname, 
+                          sequence_length=64)
+
+    if data_dir is None: data_dir = "/data"
+
+
+    # Load model 
+
+    def model_fn(mname:Optional[str]=None):
+        model = UPA000.from_pretrained(UPMAConfig(), mname=mname)
+        return model
+
+    model = load_model(output_dir, model_fn, do_inference=check_inference_mode(input_args), use_pretrained=input_args.use_pretrained)
+    model.eval()
+
+    keys = ['data_idx', 'data_input_ids', 'data_attention_mask', 'lnk2data_idx', 'lnk2data_scores', 'lnk2data_data2ptr', 
+            'lnk2data_input_ids', 'lnk2data_attention_mask']
+
+    injection_layer = model.config.memory_injection_layers[0]
+
+    stats = dict()
+    
+    datasets = BEIR_DATASETS if datasets is None else datasets
+    for dataset in tqdm(datasets):
+        print(dataset)
+
+        config_file = f"{data_dir}/datasets/beir/{dataset}/XC/configs/data.json"
+        train_dset, test_dset = load_upma_block(dataset, config_file, input_args)
+
+        dataset = dataset.replace("/", "-")
+        data_meta = retain_topk(sp.load_npz(f"{linker_dir}/test_predictions_{dataset}.npz"), k=data_lnk_topk)
+
+        # end analysis
+
+        meta_kwargs = {
+            "lnk_meta": SMetaXCDataset(prefix="lnk", data_meta=data_meta, meta_info=meta_info, n_sdata_meta_samples=n_data_lnk_samples,
+                                       return_scores=True, meta_oversample=True),
+        }
+        
+        test_dset = SXCDataset(test_dset.data, **meta_kwargs)
+        test_dl = DataLoader(test_dset, batch_size=eval_batch_size, collate_fn=identity_collate_fn)
+
+        valid_attention_prec = {}
+
+        pbar = tqdm(total=20)
+        for i, batch in enumerate(test_dl):
+            inputs = {k: batch[k] for k in keys}
+
+            pbar.update(1)
+            if i > 20: break
+            
+            with torch.no_grad():
+                with torch.amp.autocast(device_type="cuda"):
+                    o = model(**inputs, output_attentions=True)
+
+                    attention_mask = inputs["data_attention_mask"]
+                    m_attention_mask = torch.hstack([attention_mask, torch.ones(attention_mask.shape[0], n_data_lnk_samples)])
+                    mm = m_attention_mask.unsqueeze(2) @ m_attention_mask.unsqueeze(1)
+
+                    for l in range(injection_layer, 7):
+
+                        scores = o.data_o.attentions[l-1] * mm.unsqueeze(1).to("cuda")
+
+                        prec = valid_attention_prec.setdefault(l, [])
+                        for i in range(scores.shape[0]):
+
+                            sc, mask, m_mask = scores[i], attention_mask[i], m_attention_mask[i]
+
+                            n, m_n = int(mask.sum()), int(m_mask.sum())
+
+                            # # Ratio
+                            # m_sc = sc[:, :n, -n_data_lnk_samples:]
+                            # valid = (m_sc.sum(dim=-1) > 2*n_data_lnk_samples/m_n)
+                            # valid = valid.any(dim=0)[:n]
+
+                            # Top-k
+                            m_sc = sc[:, :n]
+                            top_idx = torch.topk(m_sc, dim=-1, k=max(2, min(n-3, 10)))[1]
+                            valid = (top_idx >= mask.shape[0]).sum(dim=-1)
+                            valid = valid > 2
+                            valid = valid.any(dim=0)
+
+                            p = valid.sum()/n
+                            prec.append(p.item())
+
+        pbar.close()
+
+        stats[dataset] = {k:(np.mean(v), np.std(v)) for k,v in valid_attention_prec.items()}
+        print(stats[dataset])
+
+    return stats
+
+
 def additional_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--analysis_type', type=str, default=None)
+    parser.add_argument('--attention_analysis', action="store_true")
     return parser.parse_known_args()[0]
 
 # end analysis
@@ -163,7 +275,23 @@ if __name__ == '__main__':
     tie_memory_encoder_weights = True
     exclude_module_from_tying = "2.output_layer_norm"
 
-    if input_args.beir_mode:
+    if extra_args.attention_analysis:
+        meta_file = "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/intent_substring/conflation_01/raw_data/intent.raw.csv"
+        linker_dir = "/home/sasokan/b-sprabhu/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002/predictions/"
+        data_dir = "/home/sasokan/b-sprabhu/"
+
+        stats = attention_score_analysis(output_dir, input_args, mname, "msmarco-intent-substring-conflation-01", meta_file, linker_dir, data_dir, 
+                                         eval_batch_size=400, data_repr_pooling=False, memory_injection_layer=memory_injection_layer, memory_type=memory_type, 
+                                         n_memory_layers=n_memory_layers, tie_memory_encoder_weights=tie_memory_encoder_weights, 
+                                         exclude_module_from_tying=exclude_module_from_tying)
+
+        stats_dir = f"{output_dir}/stats"
+        os.makedirs(stats_dir, exist_ok=True)
+
+        with open(f"{stats_dir}/attention.json", "w") as file:
+            json.dump(stats, file)
+
+    elif input_args.beir_mode:
         meta_file = "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/intent_substring/conflation_01/raw_data/intent.raw.csv"
         linker_dir = "/home/sasokan/b-sprabhu/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002/predictions/"
         data_dir = "/home/sasokan/b-sprabhu/"
