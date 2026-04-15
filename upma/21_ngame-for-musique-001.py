@@ -11,6 +11,9 @@ from xcai.misc import *
 from xcai.main import *
 from xcai.basics import *
 
+from xcai.multihop import *
+from xcai.models.PPP0XX import DBT009, DBTConfig
+
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 5
 os.environ["WANDB_PROJECT"] = "04_musique"
 
@@ -28,5 +31,95 @@ if __name__ == '__main__':
     config_file = "/home/sasokan/b-sprabhu/datasets/multihop/musique/XC/configs/data.json"
 
     train_dset, test_dset = load_linker_block("musique", config_file, input_args, extra_args)
-    linker_run(output_dir, input_args, mname, test_dset, train_dset)
+
+    # linker_run(output_dir, input_args, mname, test_dset, train_dset, eval_batch_size=32)
+
+    args = XCLearningArguments(
+        output_dir=output_dir,
+        logging_first_step=True,
+        per_device_train_batch_size=800,
+        per_device_eval_batch_size=128,
+        representation_num_beams=200,
+        representation_accumulation_steps=10,
+        save_strategy="steps",
+        eval_strategy="steps",
+        eval_steps=5000,
+        save_steps=5000,
+        save_total_limit=5,
+        num_train_epochs=300,
+        predict_with_representation=True,
+        representation_search_type='BRUTEFORCE',
+        adam_epsilon=1e-6,
+        warmup_steps=100,
+        weight_decay=0.01,
+        learning_rate=2e-4,
+
+        group_by_cluster=True,
+        num_clustering_warmup_epochs=10,
+        num_cluster_update_epochs=5,
+        num_cluster_size_update_epochs=25,
+        clustering_type='EXPO',
+        minimum_cluster_size=2,
+        maximum_cluster_size=1600,
+
+        metric_for_best_model='N@10',
+        load_best_model_at_end=True,
+        target_indices_key='plbl2data_idx',
+        target_pointer_key='plbl2data_data2ptr',
+
+        use_encoder_parallel=True,
+        max_grad_norm=None,
+        fp16=True,
+
+        use_cpu_for_searching=True,
+        use_cpu_for_clustering=True,
+
+        label_names=["data_input_text"],
+        use_saved_representation_for_indexing=True,
+    )
+
+    config = DBTConfig(
+        margin = 0.3,
+        num_negatives = 10,
+        tau = 0.1,
+        apply_softmax = True,
+        reduction = "mean",
+
+        normalize = True,
+        use_layer_norm = True,
+
+        use_encoder_parallel = True,
+        loss_function = "triplet"
+    )
+
+    def model_fn(mname, config):
+        return DBT009.from_pretrained(mname, config=config)
+
+    do_inference = check_inference_mode(input_args)
+    model = load_model(args.output_dir, model_fn, {"mname": mname, "config": config}, do_inference=do_inference,
+                       use_pretrained=input_args.use_pretrained)
+
+    metric = PrecReclHits(test_dset.data.n_lbl, test_dset.data.data_lbl_filterer, prop=None if train_dset is None else train_dset.data.data_lbl,
+                          pk=10, rk=200, hk=5, rep_pk=[1, 3, 5, 10], rep_rk=[10, 100, 200], rep_hk=[1, 3, 5])
+
+    learn = MultihopLearner(
+        tokenizer=config_file,
+        model=model,
+        args=args,
+        train_dataset=train_dset,
+        eval_dataset=test_dset,
+        data_collator=identity_collate_fn,
+        compute_metrics=metric,
+    )
+
+    # learn = XCLearner(
+    #     model=model,
+    #     args=args,
+    #     train_dataset=train_dset,
+    #     eval_dataset=test_dset,
+    #     data_collator=identity_collate_fn,
+    #     compute_metrics=metric,
+    # )
+
+    print(learn.evaluate())
 

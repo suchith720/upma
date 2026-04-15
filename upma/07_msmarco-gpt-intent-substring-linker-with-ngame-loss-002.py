@@ -7,6 +7,7 @@ __all__ = []
 import os, argparse, json, scipy.sparse as sp
 
 from tqdm.auto import tqdm
+from typing import Optional, List
 
 from xcai.misc import *
 from xcai.main import *
@@ -21,6 +22,54 @@ DATASETS = [
     "trecdl19",
     "trecdl20",
 ]
+
+MULTIHOP_DATASETS = [
+    "musique",
+]
+
+def linker_multihop_inference(output_dir:str, input_args:argparse.ArgumentParser, mname:str, save_file_name:str, 
+                              meta_file:str, pred_meta_file:Optional[str]=None, datasets:Optional[List]=None, 
+                              pred_dir_name:Optional[str]=None, use_task_specific_metadata:Optional[bool]=False, 
+                              meta_sequence_length:Optional[int]=64, get_data_predictions:Optional[bool]=True, 
+                              get_label_predictions:Optional[bool]=False, get_meta_predictions:Optional[bool]=False, 
+                              normalize:Optional[bool]=True, use_layer_norm:Optional[bool]=True, eval_batch_size:Optional[int]=800, 
+                              model_type:Optional[str]="best"):
+    
+    input_args.only_test = True
+    
+    os.makedirs(f"{input_args.pickle_dir}/multihop/", exist_ok=True)
+
+    meta_info = load_info(f"{input_args.pickle_dir}/{save_file_name}.joblib", f"/data/datasets/beir/msmarco/XC/{meta_file}",
+                          mname, sequence_length=meta_sequence_length)
+
+    datasets = MULTIHOP_DATASETS if datasets is None else datasets
+    for dataset in tqdm(datasets):
+        print(dataset)
+        dataset_prefix = dataset.replace("/", "-")
+
+        # load data
+        input_args.do_test_inference = input_args.save_test_prediction = True
+        test_info = load_info(f"{input_args.pickle_dir}/multihop/{dataset_prefix}.joblib",
+                              f"/data/datasets/multihop/{dataset}/XC/raw_data/test.raw.csv",
+                              mname, sequence_length=32)
+        test_dset = SXCDataset(SMainXCDataset(data_info=test_info, lbl_info=meta_info))
+
+        input_args.prediction_suffix = dataset_prefix
+        trn_repr, tst_repr, lbl_repr, trn_pred, tst_pred, trn_metric, tst_metric = linker_run(output_dir, input_args, 
+                                                                                              mname, test_dset, 
+                                                                                              save_dir_name=pred_dir_name, 
+                                                                                              normalize=normalize, 
+                                                                                              use_layer_norm=use_layer_norm, 
+                                                                                              eval_batch_size=eval_batch_size, 
+                                                                                              model_type=model_type)
+        print(tst_metric)
+
+
+def additional_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--multihop_mode', action='store_true')
+    return parser.parse_known_args()[0]
+
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
@@ -45,6 +94,13 @@ if __name__ == '__main__':
 
         linker_beir_inference(output_dir, input_args, mname, save_file_name=save_file_name, meta_file=meta_file, 
                               pred_dir_name=pred_dir_name, meta_sequence_length=128, datasets=DATASETS)
+
+    elif extra_args.multihop_mode:
+        meta_dir, save_file_name, pred_dir_name = "intent_substring/conflation_01/raw_data/", "msmarco-intent-substring-conflation-01", "predictions"
+        meta_file = f"{meta_dir}/intent.raw.csv"
+
+        linker_multihop_inference(output_dir, input_args, mname, save_file_name=save_file_name, meta_file=meta_file, 
+                                  pred_dir_name=pred_dir_name, meta_sequence_length=128)
 
     elif input_args.beir_metadata_mapping:
         meta_file, save_file_name = "intent_substring/conflation_01/raw_data/intent.raw.csv", "msmarco-intent-substring-conflation-01"

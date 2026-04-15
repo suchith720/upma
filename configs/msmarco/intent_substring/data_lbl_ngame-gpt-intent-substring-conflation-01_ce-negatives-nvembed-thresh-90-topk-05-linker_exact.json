@@ -1,10 +1,15 @@
 {
-    "data_lbl_ngame-gpt-intent-substring-conflation-01": {
+    "data_lbl_ngame-gpt-intent-substring-conflation-01_ce-negatives-nvembed-thresh-90-topk-05-linker_exact": {
         "path": {
             "train": {
-                "data_lbl": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/trn_X_Y.npz",
+                "data_lbl": "/data/datasets/beir/msmarco/XC//trn_X_Y_ce-exact.npz",
                 "data_info": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/raw_data/train.raw.txt",
-                "lbl_info": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/raw_data/label.raw.txt",
+                "lbl_info": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/raw_data/label_exact.raw.txt",
+                "neg_meta": {
+                    "prefix": "neg",
+                    "data_meta": "/data/outputs/mogicX/54_nvembed-for-msmarco-001/matrices/msmarco/ce-negatives_trn_X_Y_normalize_thresh-90.npz",
+                    "meta_info": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/raw_data/ce-scores.raw.txt"
+                },
                 "lnk_meta": {
                     "prefix": "lnk",
                     "data_meta": "/home/sasokan/b-sprabhu/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002/predictions/train_predictions.npz",
@@ -12,8 +17,9 @@
                 }
             },
             "test": {
-                "data_lbl": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/tst_X_Y.npz",
+                "data_lbl": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/tst_X_Y_exact.npz",
                 "data_info": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/raw_data/test.raw.txt",
+                "lbl_info": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/raw_data/label_exact.raw.txt",
                 "lnk_meta": {
                     "prefix": "lnk",
                     "data_meta": "/home/sasokan/b-sprabhu/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002/predictions/test_predictions.npz",
