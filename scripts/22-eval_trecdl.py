@@ -113,8 +113,11 @@ if __name__ == "__main__":
     # gt = sp.load_npz("/home/sasokan/b-sprabhu/datasets/beir/trecdl19/XC/tst_X_Y.npz")
     # pred = sp.load_npz("/home/sasokan/b-sprabhu/outputs/upma/17_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-with-calibration-loss-001/predictions/test_predictions_trecdl19.npz")
 
-    gt = sp.load_npz("/home/sasokan/b-sprabhu/datasets/beir/trecdl20/XC/tst_X_Y.npz")
-    pred = sp.load_npz("/home/sasokan/b-sprabhu/outputs/upma/17_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-with-calibration-loss-001/predictions/test_predictions_trecdl20.npz")
+    # gt = sp.load_npz("/home/sasokan/b-sprabhu/datasets/beir/trecdl20/XC/tst_X_Y.npz")
+    # pred = sp.load_npz("/home/sasokan/b-sprabhu/outputs/upma/17_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-with-calibration-loss-001/predictions/test_predictions_trecdl20.npz")
+
+    gt = sp.load_npz("/home/sasokan/b-sprabhu/datasets/beir/trecdl19/XC/tst_X_Y.npz")
+    pred = sp.load_npz("/data/suchith/outputs/upma/22_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-with-calibration-loss-and-nvembed-teacher-001/predictions/test_predictions_trecdl19.npz")
 
     # qrels = {}
     # for i in range(gt.shape[0]):
