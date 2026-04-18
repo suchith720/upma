@@ -1,6 +1,8 @@
-import scipy.sparse as sp, pytrec_eval, numpy as np, torch
+import scipy.sparse as sp, pytrec_eval, numpy as np, torch, json, os
+from tqdm.auto import tqdm
 
 from xcai.metrics import *
+from xcai.misc import BEIR_DATASETS
 
 import xclib.evaluation.xc_metrics as xm
 
@@ -109,7 +111,7 @@ def ndcg(X, true_labels, k=5, sorted=False, use_cython=False):
     return _ndcg(eval_flags, idcg, k)
 
 
-if __name__ == "__main__":
+def main():
     # gt = sp.load_npz("/home/sasokan/b-sprabhu/datasets/beir/trecdl19/XC/tst_X_Y.npz")
     # pred = sp.load_npz("/home/sasokan/b-sprabhu/outputs/upma/17_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-with-calibration-loss-001/predictions/test_predictions_trecdl19.npz")
 
@@ -146,4 +148,44 @@ if __name__ == "__main__":
         "targ_ptr": torch.tensor([p-q for p,q in zip(gt.indptr[1:], gt.indptr)]),
     }
     print(metric(**o))
+
+
+if __name__ == "__main__":
+
+    # data_dir = "/data/suchith/outputs/upma/22_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-with-calibration-loss-and-nvembed-teacher-002/"
+
+    # data_dir = "/data/outputs/upma/17_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-with-calibration-loss-001/"
+
+    beir_metrics = {}
+    for dataset in tqdm(BEIR_DATASETS):
+        print(dataset)
+
+        gt = sp.load_npz(f"/home/sasokan/b-sprabhu/datasets/beir/{dataset}/XC/tst_X_Y.npz")
+
+        dataset = dataset.replace("/", "-")
+        pred_file = f"{data_dir}/predictions/test_predictions_{dataset}.npz"
+
+        if not os.path.exists(pred_file): continue
+        pred = sp.load_npz(f"{data_dir}/predictions/test_predictions_{dataset}.npz")
+
+        metric_fn = PrecReclMrr(gt.shape[1], pk=10, rk=200, rep_pk=[1, 3, 5, 10], rep_rk=[10, 100, 200], mk=[5, 10, 20])
+        o = {
+            "pred_idx": torch.tensor(pred.indices),
+            "pred_score": torch.tensor(pred.data),
+            "pred_ptr": torch.tensor([p-q for p,q in zip(pred.indptr[1:], pred.indptr)]),
+            "targ_idx": torch.tensor(gt.indices),
+            "targ_score": torch.tensor(gt.data),
+            "targ_ptr": torch.tensor([p-q for p,q in zip(gt.indptr[1:], gt.indptr)]),
+        }
+        metrics = metric_fn(**o)
+        metrics = {k:float(v) for k,v in metrics.items()}
+        print(metrics)
+
+        with open(f"{data_dir}/metrics/{dataset}.json", "w") as file:
+            json.dump({dataset: metrics}, file, indent=4)
+
+        beir_metrics[dataset] = metrics
+
+    with open(f"{data_dir}/metrics/beir.json", "w") as file:
+        json.dump(beir_metrics, file, indent=4)
 

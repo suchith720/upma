@@ -1,13 +1,13 @@
 {
-    "data_lbl_ngame-gpt-intent-substring-conflation-01_ce-negatives-nvembed-thresh-90-topk-05-linker_exact": {
+    "data_lbl_ngame-gpt-intent-substring-conflation-01_ce-negatives-nvembed-thresh-70-ce-positives-top5-topk-05-linker_exact": {
         "path": {
             "train": {
-                "data_lbl": "/data/datasets/beir/msmarco/XC//trn_X_Y_ce-exact.npz",
+                "data_lbl": "/data/outputs/mogicX/54_nvembed-for-msmarco-001/matrices/msmarco/ce-positives_trn_X_Y_top5.npz",
                 "data_info": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/raw_data/train.raw.txt",
-                "lbl_info": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/raw_data/label_exact.raw.txt",
+                "lbl_info": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/raw_data/label.raw.txt",
                 "neg_meta": {
                     "prefix": "neg",
-                    "data_meta": "/data/outputs/mogicX/54_nvembed-for-msmarco-001/matrices/msmarco/ce-negatives_trn_X_Y_thresh-90.npz",
+                    "data_meta": "/data/outputs/mogicX/54_nvembed-for-msmarco-001/matrices/msmarco/ce-negatives_trn_X_Y_thresh-70.npz",
                     "meta_info": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/raw_data/ce-scores.raw.txt"
                 },
                 "lnk_meta": {

@@ -16,7 +16,7 @@ os.environ["WANDB_PROJECT"] = "05_upma-msmarco-gpt-concept-substring"
 if __name__ == '__main__':
     input_args = parse_args()
 
-    output_dir = "/data/suchith/outputs/upma/22_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-with-calibration-loss-and-nvembed-teacher-003/"
+    output_dir = "/data/suchith/outputs/upma/22_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-with-calibration-loss-and-nvembed-teacher-004/"
 
     input_args.use_sxc_sampler = True
     input_args.pickle_dir = "/data/suchith/datasets/processed/"
@@ -34,14 +34,14 @@ if __name__ == '__main__':
         update_config_during_inference, use_data_memory = False, True
         metric_dir_name, pred_dir_name = "metrics", "predictions"
 
-        upma_beir_inference(output_dir, input_args, mname, "msmarco-intent-substring-conflation-01", meta_file, linker_dir, eval_batch_size=600, 
+        upma_beir_inference(output_dir, input_args, mname, "msmarco-intent-substring-conflation-01", meta_file, linker_dir, eval_batch_size=800, 
                             data_repr_pooling=False, memory_injection_layer=memory_injection_layer, use_calib_loss=True, calib_loss_weight=0.1, 
                             use_data_memory=use_data_memory, metric_dir_name=metric_dir_name, pred_dir_name=pred_dir_name, 
                             update_config_during_inference=update_config_during_inference, normalize=normalize, num_input_metadata=3, 
                             n_data_lnk_samples=3, data_lnk_topk=3)
     else:
         config_file = (
-            "configs/msmarco/intent_substring/data_lbl_ngame-gpt-intent-substring-conflation-01_ce-negatives-nvembed-thresh-90-topk-05-linker_exact.json"
+            "configs/msmarco/intent_substring/data_lbl_ngame-gpt-intent-substring-conflation-01_ce-negatives-nvembed-thresh-70-ce-positives-top5-topk-05-linker_exact.json"
             if input_args.exact else
             "configs/msmarco/intent_substring/data_lbl_ngame-gpt-intent-substring-conflation-01.json"
         )
