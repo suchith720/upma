@@ -12,11 +12,6 @@ from xcai.basics import *
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 4
 os.environ["WANDB_PROJECT"] = "02_upma-msmarco-gpt-concept-substring"
 
-DATASETS = [
-    "trecdl19",
-    "trecdl20",
-]
-
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 21
 if __name__ == '__main__':
     input_args = parse_args()
@@ -25,7 +20,7 @@ if __name__ == '__main__':
     output_dir = "/home/sasokan/b-sprabhu/outputs/upma/17_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-with-calibration-loss-001/"
 
     input_args.use_sxc_sampler = True
-    input_args.pickle_dir = "/home/aiscuser/scratch1/datasets/processed/"
+    input_args.pickle_dir = "/data/suchith/datasets/processed/"
     mname = "distilbert-base-uncased"
 
     memory_injection_layer = 3

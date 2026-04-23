@@ -12,6 +12,11 @@ from xcai.basics import *
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 4
 os.environ["WANDB_PROJECT"] = "05_upma-msmarco-gpt-concept-substring"
 
+DATASETS = [
+    "trecdl19",
+    "trecdl20",
+]
+
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 21
 if __name__ == '__main__':
     input_args = parse_args()
@@ -34,11 +39,11 @@ if __name__ == '__main__':
         update_config_during_inference, use_data_memory = False, True
         metric_dir_name, pred_dir_name = "metrics", "predictions"
 
-        upma_beir_inference(output_dir, input_args, mname, "msmarco-intent-substring-conflation-01", meta_file, linker_dir, eval_batch_size=800, 
+        upma_beir_inference(output_dir, input_args, mname, "msmarco-intent-substring-conflation-01", meta_file, linker_dir, eval_batch_size=400, 
                             data_repr_pooling=False, memory_injection_layer=memory_injection_layer, use_calib_loss=True, calib_loss_weight=0.1, 
                             use_data_memory=use_data_memory, metric_dir_name=metric_dir_name, pred_dir_name=pred_dir_name, 
                             update_config_during_inference=update_config_during_inference, normalize=normalize, num_input_metadata=3, 
-                            n_data_lnk_samples=3, data_lnk_topk=3)
+                            n_data_lnk_samples=3, data_lnk_topk=3, use_saved_representation_for_indexing=True, datasets=DATASETS)
     else:
         config_file = (
             "configs/msmarco/intent_substring/data_lbl_ngame-gpt-intent-substring-conflation-01_ce-negatives-nvembed-thresh-70-ce-positives-top5-topk-05-linker_exact.json"
