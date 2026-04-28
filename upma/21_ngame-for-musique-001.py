@@ -19,13 +19,13 @@ os.environ["WANDB_PROJECT"] = "04_musique"
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
-    output_dir = "/home/sasokan/suchith/outputs/upma/21_ngame-for-musique-001"
+    output_dir = "/data/outputs/upma/21_ngame-for-musique-001"
 
     input_args = parse_args()
     extra_args = additional_args()
 
     input_args.use_sxc_sampler = True
-    input_args.pickle_dir = "/home/sasokan/suchith/datasets/processed/"
+    input_args.pickle_dir = "/data/suchith/datasets/processed/"
     mname = "sentence-transformers/msmarco-distilbert-cos-v5"
 
     config_file = "/home/sasokan/b-sprabhu/datasets/multihop/musique/XC/configs/data.json"
@@ -100,7 +100,7 @@ if __name__ == '__main__':
                        use_pretrained=input_args.use_pretrained)
 
     metric = PrecReclHits(test_dset.data.n_lbl, test_dset.data.data_lbl_filterer, prop=None if train_dset is None else train_dset.data.data_lbl,
-                          pk=10, rk=200, hk=5, rep_pk=[1, 3, 5, 10], rep_rk=[10, 100, 200], rep_hk=[1, 3, 5])
+                          pk=10, rk=200, hk=10, rep_pk=[1, 3, 5, 10], rep_rk=[10, 100, 200], rep_hk=[1, 3, 5, 10])
 
     learn = MultihopLearner(
         tokenizer=config_file,

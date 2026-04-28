@@ -16,7 +16,7 @@ os.environ["WANDB_PROJECT"] = "05_upma-msmarco-gpt-concept-substring"
 if __name__ == '__main__':
     input_args = parse_args()
 
-    output_dir = "/data/suchith/outputs/upma/22_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-with-calibration-loss-and-nvembed-teacher-008/"
+    output_dir = "/data/suchith/outputs/upma/22_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-with-calibration-loss-and-nvembed-teacher-009/"
 
     input_args.use_sxc_sampler = True
     input_args.pickle_dir = "/data/suchith/datasets/processed/"
@@ -41,17 +41,17 @@ if __name__ == '__main__':
                             n_data_lnk_samples=3, data_lnk_topk=3, use_saved_representation_for_indexing=True)
     else:
         config_file = (
-            "configs/msmarco/intent_substring/data_lbl_ngame-gpt-intent-substring-conflation-01_ce-negatives-remove-top10-ce-positives-top5-topk-05-linker_exact.json"
+            "configs/msmarco/intent_substring/data_lbl_ngame-gpt-intent-substring-conflation-01_ce-negatives-nvembed-thresh-70-ce-positives-top5-topk-05-linker_exact.json"
             if input_args.exact else
             "configs/msmarco/intent_substring/data_lbl_ngame-gpt-intent-substring-conflation-01.json"
         )
 
-        train_dset, test_dset = load_upma_block("msmarco", config_file, input_args, n_data_lnk_samples=3, data_lnk_topk=3)
+        train_dset, test_dset = load_upma_block("msmarco", config_file, input_args, n_data_lnk_samples=3, data_lnk_topk=3, num_label_samples=4)
 
         idx = np.where(train_dset.meta["neg_meta"].data_meta.getnnz(axis=1) > 0)[0]
         train_dset = train_dset._getitems(idx)
 
-        upma_run(output_dir, input_args, mname, test_dset, train_dset, train_batch_size=128, data_repr_pooling=False, 
-                 memory_injection_layer=memory_injection_layer, num_input_metadata=3, use_calib_loss=True, 
-                 calib_loss_weight=0.1, normalize=normalize)
+        upma_run(output_dir, input_args, mname, test_dset, train_dset, train_batch_size=64, eval_batch_size=300, 
+                 data_repr_pooling=False, memory_injection_layer=memory_injection_layer, num_input_metadata=3, 
+                 use_calib_loss=True, calib_loss_weight=0.1, normalize=normalize)
 
