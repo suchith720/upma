@@ -7,19 +7,41 @@ __all__ = []
 import argparse, json, os
 from tqdm.auto import tqdm
 
+from typing import Optional
+
 from xcai.misc import *
 from xcai.main import *
 from xcai.basics import *
 
 from xcai.multihop import *
-from xcai.models.PPP0XX import DBT009, DBTConfig
+from xcai.models.PPP0XX import DBT024, DBTConfig
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 5
 os.environ["WANDB_PROJECT"] = "04_musique"
 
+def load_block(dataset:str, config_file:str, input_args:argparse.ArgumentParser, n_data_lnk_samples:Optional[int]=5, 
+               n_lbl_lnk_samples:Optional[int]=5, data_neg_topk:Optional[int]=None, train_label_topk:Optional[int]=None, 
+               num_label_samples:Optional[int]=1, num_neg_samples:Optional[int]=1):
+    config_key, fname = get_config_key(config_file)
+    pkl_file = get_pkl_file(input_args.pickle_dir, f"{dataset}_{fname}_distilbert-base-uncased", input_args.use_sxc_sampler,
+                            input_args.exact, input_args.only_test)
+
+    train_data_meta_topk = None if data_neg_topk is None else {"neg_meta": data_neg_topk}
+
+    os.makedirs(os.path.dirname(pkl_file), exist_ok=True)
+    block = build_block(pkl_file, config_file, input_args.use_sxc_sampler, config_key, do_build=input_args.build_block, 
+                        only_test=input_args.only_test, main_oversample=True, meta_oversample=True, return_scores=False, 
+                        train_data_meta_topk=train_data_meta_topk, n_slbl_samples=num_label_samples, 
+                        n_sdata_meta_samples={"neg_meta": num_neg_samples}, n_slbl_meta_samples={"neg_meta": num_neg_samples}, 
+                        n_sneg_meta_samples={"neg_meta": num_neg_samples})
+    
+    train_dset, test_dset = None if block.train is None else block.train.dset, block.test.dset
+
+    return train_dset, test_dset
+
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
-    output_dir = "/data/outputs/upma/21_ngame-for-musique-001"
+    output_dir = "/data/suchith/outputs/upma/21_ngame-for-musique-with-negatives-002"
 
     input_args = parse_args()
     extra_args = additional_args()
@@ -28,17 +50,15 @@ if __name__ == '__main__':
     input_args.pickle_dir = "/data/suchith/datasets/processed/"
     mname = "sentence-transformers/msmarco-distilbert-cos-v5"
 
-    config_file = "/home/sasokan/b-sprabhu/datasets/multihop/musique/XC/configs/data.json"
+    config_file = "/home/sasokan/b-sprabhu/datasets/multihop/musique/XC/configs/data_lbl_negatives.json"
 
-    train_dset, test_dset = load_linker_block("musique", config_file, input_args, extra_args)
-
-    # linker_run(output_dir, input_args, mname, test_dset, train_dset, eval_batch_size=32)
+    train_dset, test_dset = load_block("musique", config_file, input_args, extra_args, num_neg_samples=30)
 
     args = XCLearningArguments(
         output_dir=output_dir,
         logging_first_step=True,
-        per_device_train_batch_size=800,
-        per_device_eval_batch_size=32,
+        per_device_train_batch_size=16,
+        per_device_eval_batch_size=800,
         representation_num_beams=200,
         representation_accumulation_steps=10,
         save_strategy="steps",
@@ -79,21 +99,19 @@ if __name__ == '__main__':
     )
 
     config = DBTConfig(
-        margin = 0.3,
         num_negatives = 10,
-        tau = 0.1,
-        apply_softmax = True,
+        tau = 1.0,
         reduction = "mean",
 
         normalize = True,
         use_layer_norm = True,
 
         use_encoder_parallel = True,
-        loss_function = "triplet"
+        loss_function = "ranking"
     )
 
     def model_fn(mname, config):
-        return DBT009.from_pretrained(mname, config=config)
+        return DBT024.from_pretrained(mname, config=config)
 
     do_inference = check_inference_mode(input_args)
     model = load_model(args.output_dir, model_fn, {"mname": mname, "config": config}, do_inference=do_inference,
