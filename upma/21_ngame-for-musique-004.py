@@ -19,7 +19,7 @@ os.environ["WANDB_PROJECT"] = "04_musique"
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
-    output_dir = "/data/outputs/upma/21_ngame-for-musique-001"
+    output_dir = "/data/suchith/outputs/upma/21_ngame-for-musique-004"
 
     input_args = parse_args()
     extra_args = additional_args()
@@ -36,13 +36,13 @@ if __name__ == '__main__':
         output_dir=output_dir,
         logging_first_step=True,
         per_device_train_batch_size=800,
-        per_device_eval_batch_size=32,
+        per_device_eval_batch_size=800,
         representation_num_beams=200,
         representation_accumulation_steps=10,
         save_strategy="steps",
         eval_strategy="steps",
-        eval_steps=5000,
-        save_steps=5000,
+        eval_steps=500,
+        save_steps=500,
         save_total_limit=5,
         num_train_epochs=300,
         predict_with_representation=True,
@@ -100,21 +100,8 @@ if __name__ == '__main__':
     metric = PrecReclHits(test_dset.data.n_lbl, test_dset.data.data_lbl_filterer, prop=None if train_dset is None else train_dset.data.data_lbl,
                           pk=10, rk=200, hk=10, rep_pk=[1, 3, 5, 10], rep_rk=[10, 100, 200], rep_hk=[1, 3, 5, 10])
 
-    learn = MultihopLearner(
-        tokenizer=config_file,
-        model=model,
-        args=args,
-        train_dataset=train_dset,
-        eval_dataset=test_dset,
-        data_collator=identity_collate_fn,
-        compute_metrics=metric,
-    )
-
-    print(learn.evaluate(beam_size=10, num_hops=4, topk_per_hop=10, metric_type="constrained-hop-wise"))
-
-    print(learn.evaluate(beam_size=10, num_hops=4, topk_per_hop=10, metric_type="hop-wise"))
-
-    # learn = XCLearner(
+    # learn = MultihopLearner(
+    #     tokenizer=config_file,
     #     model=model,
     #     args=args,
     #     train_dataset=train_dset,
@@ -122,6 +109,15 @@ if __name__ == '__main__':
     #     data_collator=identity_collate_fn,
     #     compute_metrics=metric,
     # )
-    #
-    # main(learn, input_args, n_lbl=test_dset.data.n_lbl)
+    # print(learn.evaluate(beam_size=10, num_hops=4, topk_per_hop=10, metric_type="hop-wise"))
+
+    learn = XCLearner(
+        model=model,
+        args=args,
+        train_dataset=train_dset,
+        eval_dataset=test_dset,
+        data_collator=identity_collate_fn,
+        compute_metrics=metric,
+    )
+    main(learn, input_args, n_lbl=test_dset.data.n_lbl)
 

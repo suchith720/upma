@@ -99,15 +99,17 @@ if __name__ == '__main__':
     )
 
     config = DBTConfig(
+        margin = 0.3,
         num_negatives = 10,
-        tau = 1.0,
+        tau = 0.1,
+        apply_softmax = True,
         reduction = "mean",
 
         normalize = True,
         use_layer_norm = True,
 
         use_encoder_parallel = True,
-        loss_function = "ranking"
+        loss_function = "triplet"
     )
 
     def model_fn(mname, config):
@@ -120,17 +122,6 @@ if __name__ == '__main__':
     metric = PrecReclHits(test_dset.data.n_lbl, test_dset.data.data_lbl_filterer, prop=None if train_dset is None else train_dset.data.data_lbl,
                           pk=10, rk=200, hk=10, rep_pk=[1, 3, 5, 10], rep_rk=[10, 100, 200], rep_hk=[1, 3, 5, 10])
 
-    # learn = MultihopLearner(
-    #     tokenizer=config_file,
-    #     model=model,
-    #     args=args,
-    #     train_dataset=train_dset,
-    #     eval_dataset=test_dset,
-    #     data_collator=identity_collate_fn,
-    #     compute_metrics=metric,
-    # )
-    # print(learn.evaluate(beam_size=10, num_hops=4, topk_per_hop=10))
-
     learn = XCLearner(
         model=model,
         args=args,
@@ -141,4 +132,14 @@ if __name__ == '__main__':
     )
     main(learn, input_args, n_lbl=test_dset.data.n_lbl)
 
+    # learn = MultihopLearner(
+    #     tokenizer=config_file,
+    #     model=model,
+    #     args=args,
+    #     train_dataset=train_dset,
+    #     eval_dataset=test_dset,
+    #     data_collator=identity_collate_fn,
+    #     compute_metrics=metric,
+    # )
+    # print(learn.evaluate(beam_size=10, num_hops=4, topk_per_hop=10))
 
