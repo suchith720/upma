@@ -1,6 +1,6 @@
-import pandas as pd, ast, scipy.sparse as sp, numpy as np, re, os, logging, joblib
+import pandas as pd, ast, scipy.sparse as sp, numpy as np, re, os, logging, joblib, json
 from itertools import chain
-from typing import List
+from typing import List, Optional
 
 from sugar.core import load_raw_file, save_raw_file
 
@@ -25,7 +25,7 @@ def load_generations():
 
     return df["id"], df["raw_model_response"]
 
-def text_processing(text):
+def text_processing(text:str):
     if isinstance(text, list):
         return [text_processing(t) for t in text]
     if not isinstance(text, str):
@@ -48,7 +48,7 @@ def preprocess_triples(triples: List[List[List]]):
     triples = [[tuple(k) for k in o if len(k) == 3] for o in triples]
     return triples
 
-def process_metadata(data_meta):
+def process_metadata(data_meta:sp.csr_matrix, prefix:Optional[str]=None):
     vocab = dict()
     data, indices, indptr = [], [], [0]
     for o in data_meta:
@@ -57,14 +57,87 @@ def process_metadata(data_meta):
             indices.append(i)
             data.append(1.0)
         indptr.append(len(data))
+
     matrix = sp.csr_matrix((data, indices, indptr), shape=(len(data_meta), len(vocab)), dtype=np.float32)
     matrix.eliminate_zeros()
     matrix.sum_duplicates()
-    meta_ids = list(range(len(vocab)))
+    
+    prefix = "" if prefix is None else f"{prefix}-"
+    meta_ids = [f"{prefix}{i}" for i in range(len(vocab))]
     meta_txt = sorted(vocab, key=lambda x: vocab[x])
     return matrix, meta_ids, meta_txt
 
+def create_entity_graph(entity_txt:List, lbl_triples:List):
+    entity_ids2idx = {k:i for i,k in enumerate(entity_txt)}
+    entity2entity = {}
+    for triples in lbl_triples:
+        for triple in triples: 
+            entity2entity.setdefault(triple[0], []).append(triple[2])
+
+    data, indices, indptr = [], [], [0]
+    for entity in entity_txt:
+        indices.extend([entity_ids2idx[o] for o in entity2entity.get(entity, [])])
+        indptr.append(len(indices))
+    data = [1] * len(indices)
+
+    ent_ent = sp.csr_matrix((data, indices, indptr), shape=(len(entity_txt), len(entity_txt)), dtype=np.float32)
+    ent_ent.sum_duplicates()
+    ent_ent.eliminate_zeros()
+
+    return ent_ent
+
+def create_fact_entity_graph(fact_txt:List, entity_txt:List, lbl_triples:List):
+    entity_ids2idx = {k:i for i,k in enumerate(entity_txt)}
+    fact2entity = {}
+    for triples in lbl_triples:
+        for triple in triples:
+            fact2entity.setdefault(triple, []).append(triple[0])
+            fact2entity.setdefault(triple, []).append(triple[2])
+
+    data, indices, indptr = [], [], [0]
+    for fact in fact_txt:
+        indices.extend([entity_ids2idx[o] for o in fact2entity.get(fact, [])])
+        indptr.append(len(indices))
+    data = [1] * len(indices)
+
+    fact_ent = sp.csr_matrix((data, indices, indptr), shape=(len(fact_txt), len(entity_txt)), dtype=np.float32)
+    fact_ent.sum_duplicates()
+    fact_ent.eliminate_zeros()
+
+    return fact_ent
+
+def get_fact_examples(fact_txt:List, entity_txt:List, lbl_fact_mat:sp.csr_matrix, lbl_entity_mat:sp.csr_matrix):
+    lbl_ids, lbl_txt = load_raw_file("/data/datasets/multihop/musique/XC/raw_data/label.raw.csv")
+    idxs = np.random.permutation(len(lbl_txt))[:5]
+    examples = []
+    for i in idxs:
+        example = {
+            "Label": lbl_txt[i],
+            "Facts": " || ".join([fact_txt[o] for o in lbl_fact_mat[i].indices]),
+            "Entities": " || ".join([entity_txt[o] for o in lbl_entity_mat[i].indices]),
+        }
+        examples.append(example)
+    with open("/data/datasets/multihop/musique/examples/01-label_fact.json", "w") as file:
+        json.dump(examples, file, indent=4)
+
+def get_entity_examples(entity_txt:List, ent_ent:sp.csr_matrix):
+    valid_idxs = np.where(ent_ent.getnnz(axis=1) > 0)[0]
+    idxs = np.random.permutation(len(valid_idxs))[:5]
+    idxs = valid_idxs[idxs]
+    examples = []
+    for i in idxs:
+        example = {
+            "Entity": entity_txt[i],
+            "Related entities": " || ".join([entity_txt[o] for o in ent_ent[i].indices]),
+        }
+        examples.append(example)
+    with open("/data/datasets/multihop/musique/examples/02-entity_entity.json", "w") as file:
+        json.dump(examples, file, indent=4)
+
 if __name__ == "__main__":
+
+    # Load triples
+
     fname = "/data/datasets/multihop/musique/XC/raw_data/label_triples.joblib"
     if os.path.exists(fname):
         lbl_triples = joblib.load(fname)
@@ -73,22 +146,33 @@ if __name__ == "__main__":
         lbl_triples = preprocess_triples(lbl_triples)
         joblib.dump(lbl_triples, fname)
 
-    lbl_phrases = [[" ".join(k) for k in o] for o in lbl_triples]
-    lbl_phrase_mat, phrase_ids, phrase_txt = process_metadata(lbl_phrases)
-    sp.save_npz("/data/datasets/multihop/musique/XC/phrase_lbl_X_Y.npz", lbl_phrase_mat)
-    save_raw_file("/data/datasets/multihop/musique/XC/raw_data/phrase.raw.csv", phrase_ids, phrase_txt)
+    # Format facts
+
+    lbl_fact_mat, fact_ids, triples = process_metadata(lbl_triples, prefix="fact")
+    fact_txt = [" ".join(o) for o in triples]
+    joblib.dump(triples, "/data/datasets/multihop/musique/XC/raw_data/triples.joblib")
+
+    sp.save_npz("/data/datasets/multihop/musique/XC/fact_lbl_X_Y.npz", lbl_fact_mat)
+    save_raw_file("/data/datasets/multihop/musique/XC/raw_data/fact.raw.csv", fact_ids, fact_txt)
+
+    # Format entities
 
     lbl_entities = [chain(*[[k[0], k[2]] for k in o]) for o in lbl_triples]
-    lbl_entity_mat, entity_ids, entity_txt = process_metadata(lbl_entities)
+    lbl_entity_mat, entity_ids, entity_txt = process_metadata(lbl_entities, prefix="entity")
+
     sp.save_npz("/data/datasets/multihop/musique/XC/entity_lbl_X_Y.npz", lbl_entity_mat)
     save_raw_file("/data/datasets/multihop/musique/XC/raw_data/entity.raw.csv", entity_ids, entity_txt)
+    
+    ent_ent = create_entity_graph(entity_txt, lbl_triples)
+    sp.save_npz("/data/datasets/multihop/musique/XC/entity_entity_X_Y.npz", ent_ent)
+
+    fact_ent = create_fact_entity_graph(triples, entity_txt, lbl_triples)
+    sp.save_npz("/data/datasets/multihop/musique/XC/entity_fact_X_Y.npz", fact_ent)
 
     # examples
 
-    lbl_ids, lbl_txt = load_raw_file("/data/datasets/multihop/musique/XC/raw_data/label.raw.csv")
-    idxs = np.random.permutation(len(lbl_txt))[:10]
-    for i in idxs:
-        print("Label: ", lbl_txt[i])
-        print("Phrases: ", " || ".join([phrase_txt[o] for o in lbl_phrase_mat[i].indices]))
-        print("Entities: ", " || ".join([entity_txt[o] for o in lbl_entity_mat[i].indices]))
-        print()
+    get_fact_examples(fact_txt, entity_txt, lbl_fact_mat, lbl_entity_mat)
+
+    get_entity_examples(entity_txt, ent_ent)
+
+
