@@ -149,36 +149,51 @@ def weighted_random_walk(matrix:sp.csr_matrix, row_head_thresh:Optional[int]=500
     return PrunedWalk(pruned_matrix).simulate(walk_length, p_reset, topk, 2, batch_size, is_homogeneous=is_homogeneous)
 
 
+def make_bidirectional_graph(matrix:sp.csr_matrix):
+    assert matrix.shape[0] == matrix.shape[1]
+    rows, cols = matrix.nonzero()
+    matrix_t = matrix.transpose().tocsr(copy=True)
+    matrix_t[rows, cols] = 0.0
+    matrix_t.eliminate_zeros()
+    return matrix + matrix_t
+
+
 if __name__ == "__main__":
 
-    # data paths
+    # test predictions -- facts and labels
 
-    data_dir = "/data/suchith/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-001/"
+    data_dir = "/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-001/"
 
     qry_fact_pred = sp.load_npz(f"{data_dir}/predictions/multihop/musique-hipporag/test_facts.npz")
-    qry_fact_pred = retain_topk(qry_fact_pred, k=6)
     min_max_normalize(qry_fact_pred)
+    qry_fact_pred = retain_topk(qry_fact_pred, k=5)
     qry_fact_pred.eliminate_zeros()
 
     qry_lbl_pred = sp.load_npz(f"{data_dir}/predictions/multihop/musique-hipporag/test_labels.npz")
     min_max_normalize(qry_lbl_pred)
     qry_lbl_pred.eliminate_zeros()
 
-    ent_top_k, ent_thresh = 200, 0.8
-    lbl_weight = 0.1
+    # entity data
 
-    # load data
+    ent_top_k, ent_thresh = 100, 0.8
 
-    data_dir = "/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-001/"
+    ## entity similarity
 
     ent_ent_sim = retain_topk(sp.load_npz(f"{data_dir}/predictions/multihop/musique/entities_entities.npz"), k=ent_top_k)
     ent_ent_sim.data[ent_ent_sim.data < ent_thresh] = 0.0
+    ent_ent_sim.setdiag(0)
     ent_ent_sim.eliminate_zeros()
 
-    ent_ent = sp.load_npz("/data/datasets/multihop/musique/XC/entity_entity_X_Y.npz")
-    ent_ent = ent_ent + ent_ent_sim
+    ## entity graph
 
-    fact_ent = sp.load_npz("/data/datasets/multihop/musique/XC/entity_fact_X_Y.npz")
+    ent_ent = sp.load_npz("/data/datasets/multihop/musique/XC/entity_entity_X_Y.npz")
+
+    ent_ent = ent_ent + ent_ent_sim
+    ent_ent = ent_ent + ent_ent.transpose() 
+
+    # load data -- fact to entity, label to entity, train to label
+
+    ## get valid label indices
 
     lbl_file = "/home/sasokan/suchith/HippoRAG/reproduce/dataset/musique/raw_data/label.raw.csv"
     all_lbl_file = "/data/datasets/multihop/musique/XC/raw_data/label.raw.csv"
@@ -187,15 +202,25 @@ if __name__ == "__main__":
     all_lbl_txt2idx = {k:i for i,k in enumerate(all_lbl_txt)}
     valid_lbl_idx = [all_lbl_txt2idx[o] for o in lbl_txt]
 
-    lbl_ent = sp.load_npz("/data/datasets/multihop/musique/XC/entity_lbl_X_Y.npz")
-    trn_lbl = sp.load_npz("/data/datasets/multihop/musique/XC/trn_X_Y.npz")
+    ## fact to entity
 
+    fact_ent = sp.load_npz("/data/datasets/multihop/musique/XC/entity_fact_X_Y.npz")
+    fact_ent.data[:] = 1.0
+
+    ## label to entity
+
+    lbl_ent = sp.load_npz("/data/datasets/multihop/musique/XC/entity_lbl_X_Y.npz")
+    lbl_ent.data[:] = 1.0
     lbl_ent = lbl_ent[valid_lbl_idx]
+
+    ## train to label
+
+    trn_lbl = sp.load_npz("/data/datasets/multihop/musique/XC/trn_X_Y.npz")
     trn_lbl = trn_lbl[:, valid_lbl_idx]
 
     # accumulate scores
 
-    ## entity score
+    ## query-entity score
 
     qry_ent = qry_fact_pred @ fact_ent
 
@@ -207,55 +232,55 @@ if __name__ == "__main__":
     assert np.all(qry_ent.indptr == qry_ent_cnt.indptr)
 
     qry_ent.data[:] = qry_ent.data / qry_ent_cnt.data
+    
+    ent_per_lbl = lbl_ent.getnnz(axis=0)
+    ent_per_lbl[ent_per_lbl == 0] = 1.0
 
-    ## label score
+    qry_ent = qry_ent.multiply(1.0 / ent_per_lbl).tocsr()
+    qry_ent = retain_topk(qry_ent, k=5)
 
-    qry_lbl_pred = qry_lbl_pred * lbl_weight
+    ## query-label score
 
-    qry_nodes = sp.hstack([qry_ent, qry_lbl_pred])
+    lbl_weight = 0.05
+    qry_nodes = sp.hstack([qry_ent, qry_lbl_pred * lbl_weight])
 
     # graph construction
 
-    lbl_lbl = trn_lbl.T @ trn_lbl
+    lbl_lbl = sp.csr_matrix((trn_lbl.shape[1], trn_lbl.shape[1]))
     
     mat_1 = sp.hstack([ent_ent, lbl_ent.T])
     mat_2 = sp.hstack([lbl_ent, lbl_lbl])
     matrix = sp.vstack([mat_1, mat_2])
 
-    # matrix = normalize_graph(matrix)
-
-    # random walk
-
-    # output = random_walk(matrix, row_head_thresh=100, col_head_thresh=100, walk_length=400, 
-    #                      p_reset=0.4, topk=None, batch_size=1024)
-
-    # compute walks
-
-    walk_file = "/data/suchith/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-001/predictions/multihop/musique-hipporag/walks.npz"
+    walk_file = None # "/data/suchith/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-001/predictions/multihop/musique-hipporag/walks.npz"
     if walk_file is not None and os.path.exists(walk_file):
         walks = sp.load_npz(walk_file)
     else:
         walks = weighted_random_walk(matrix, row_head_thresh=500, col_head_thresh=500, walk_length=400, 
-                                     p_reset=0.8, topk=None, batch_size=1024, is_homogeneous=True)
-        sp.save_npz(walk_file, walks)
+                                     p_reset=0.5, topk=None, batch_size=1024, is_homogeneous=True)
+        if walk_file is not None: sp.save_npz(walk_file, walks)
 
     # compute scores
 
-    walks = normalize_graph(walks)
-    qry_pred = qry_nodes @ walks
+    walk_length = walks.sum(axis=1)
+    walk_length[walk_length == 0] = 1
+    walks = walks / walk_length
 
+    qry_pred = qry_nodes @ walks
     qry_pred = qry_pred[:, qry_ent.shape[1]:]
 
-    qry_pred = qry_lbl_pred + qry_pred
+    qry_pred = qry_pred + qry_lbl_pred
 
     # compute metrics
 
-    metric = PrecReclHits(qry_lbl_pred.shape[1], pk=10, rk=200, hk=10, rep_pk=[1, 3, 5, 10], rep_rk=[5, 10, 100, 200], rep_hk=[1, 3, 5, 10])
+    metric = PrecReclHits(qry_lbl_pred.shape[1], pk=10, rk=200, hk=10, rep_pk=[1, 3, 5, 10], rep_rk=[5, 10, 100, 200], 
+                          rep_hk=[1, 3, 5, 10])
     o = {
         'pred_idx': torch.tensor(qry_pred.indices, dtype=torch.int64),
         'pred_score': torch.tensor(qry_pred.data, dtype=torch.float32),
         'pred_ptr': torch.tensor([p-q for p,q in zip(qry_pred.indptr[1:], qry_pred.indptr)], dtype=torch.int64),
     }
+
     gt = sp.load_npz("/home/sasokan/suchith/HippoRAG/reproduce/dataset/musique/tst_X_Y.npz")
     assert gt.shape == qry_pred.shape
     t = {
@@ -265,6 +290,4 @@ if __name__ == "__main__":
     }
     value = metric(**o, **t)
     print(value)
-
-
 

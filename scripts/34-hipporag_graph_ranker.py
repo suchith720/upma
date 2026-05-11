@@ -1,4 +1,4 @@
-import os, torch, joblib, scipy.sparse as sp, numpy as np
+import os, torch, joblib, scipy.sparse as sp, numpy as np, logging
 
 from itertools import chain
 from hashlib import md5
@@ -13,6 +13,8 @@ import igraph as ig
 
 from sugar.core import load_raw_file
 from xclib.utils.sparse import retain_topk
+
+logger = logging.getLogger(__name__)
 
 def compute_mdhash_id(content: str, prefix: str = "") -> str:
     return prefix + md5(content.encode()).hexdigest()
@@ -66,9 +68,7 @@ class HippoRetrieval:
             for score, j in zip(entity_similarity[i].data, entity_similarity[i].indices):
                 node_key = entity_ids[i]
                 node_2_key = entity_ids[j] 
-
-                self.node_to_node_stats[(node_key, node_2_key)] = score
-                self.node_to_node_stats[(node_2_key, node_key)] = score
+                if node_key != node_2_key: self.node_to_node_stats[(node_key, node_2_key)] = score
 
     def augment_graph(self, ent_ids:List, lbl_ids:List):
         self.add_new_nodes(ent_ids, lbl_ids)
@@ -109,19 +109,26 @@ class HippoRetrieval:
             attributes=valid_weights
         )
 
-    def index(self, lbl_ids:List[str], lbl_triples:List[str], ent_ids:Optional[List]=None, ent_sim:Optional[sp.csr_matrix]=None):
-        self.node_to_node_stats = {}
-        self.ent_node_to_lbl_ids = {}
+    def index(self, lbl_ids:List[str], lbl_triples:List[str], ent_ids:Optional[List]=None, ent_sim:Optional[sp.csr_matrix]=None, 
+              graph_file:Optional[str]=None):
 
-        self.add_fact_edges(lbl_ids, lbl_triples)
+        if graph_file is not None and os.path.exists(graph_file):
+            self.graph = joblib.load(graph_file)
+        else:
+            self.node_to_node_stats = {}
+            self.ent_node_to_lbl_ids = {}
 
-        lbl_entities = [chain(*[[k[0], k[2]] for k in o]) for o in lbl_triples]
-        lbl_entities = [set(o) for o in lbl_entities]
-        self.add_passage_edges(lbl_ids, lbl_entities)
+            self.add_fact_edges(lbl_ids, lbl_triples)
 
-        if ent_sim is not None: self.add_synonymy_edges(ent_ids, ent_sim)
+            lbl_entities = [chain(*[[k[0], k[2]] for k in o]) for o in lbl_triples]
+            lbl_entities = [set(o) for o in lbl_entities]
+            self.add_passage_edges(lbl_ids, lbl_entities)
 
-        self.augment_graph(ent_ids, lbl_ids)
+            if ent_sim is not None: self.add_synonymy_edges(ent_ids, ent_sim)
+
+            self.augment_graph(ent_ids, lbl_ids)
+
+            if graph_file is not None: joblib.dump(self.graph, graph_file)
 
     def get_top_k_weights(
         self,
@@ -156,13 +163,9 @@ class HippoRetrieval:
         qry_lbl: sp.csr_matrix,
         passage_node_weight: float = 0.05
     ):
-        linking_score_map = {}
-        phrase_scores = {}
         phrase_weights = np.zeros(len(self.graph.vs['name']))
         passage_weights = np.zeros(len(self.graph.vs['name']))
         number_of_occurs = np.zeros(len(self.graph.vs['name']))
-
-        phrases_and_idxs = set()
 
         for rank, (f, score) in enumerate(zip(top_k_facts, top_k_fact_scores)):
             subject_phrase = f[0].lower()
@@ -177,31 +180,19 @@ class HippoRetrieval:
                 phrase_idx = self.node_name_to_vertex_idx.get(phrase_key, None)
 
                 if phrase_idx is not None:
-                    weighted_fact_score = score
-
                     if len(self.ent_node_to_lbl_ids.get(phrase_key, set())) > 0:
-                        weighted_fact_score /= len(self.ent_node_to_lbl_ids[phrase_key])
+                        score /= len(self.ent_node_to_lbl_ids[phrase_key])
 
-                    phrase_weights[phrase_idx] += weighted_fact_score
+                    phrase_weights[phrase_idx] += score
                     number_of_occurs[phrase_idx] += 1
-
-                phrases_and_idxs.add((phrase, phrase_idx))
 
         mask = number_of_occurs != 0
         phrase_weights[mask] = phrase_weights[mask] / number_of_occurs[mask]
 
-        # NOTE: This looks redundant
-        for phrase, phrase_idx in phrases_and_idxs:
-            if phrase not in phrase_scores:
-                phrase_scores[phrase] = []
-            phrase_scores[phrase].append(phrase_weights[phrase_idx])
-
-        # calculate average fact score for each phrase
-        for phrase, scores in phrase_scores.items():
-            linking_score_map[phrase] = float(np.mean(scores))
-
         if link_top_k:
-            phrase_weights, linking_score_map = self.get_top_k_weights(link_top_k, phrase_weights, linking_score_map)
+            sort_idxs = np.argsort(phrase_weights)[::-1][:link_top_k]
+            all_idxs = sp.csr_matrix(phrase_weights).indices
+            for i in set(all_idxs).difference(sort_idxs): phrase_weights[i] = 0.0
 
         #Get passage scores according to chosen dense retrieval model
         sort_idxs = np.argsort(qry_lbl.data)[::-1]
@@ -210,20 +201,12 @@ class HippoRetrieval:
 
         for i, dpr_sorted_doc_id in enumerate(dpr_sorted_doc_ids.tolist()):
             passage_node_key = self.passage_node_keys[dpr_sorted_doc_id]
-            passage_node_text = self.passage_node_text[dpr_sorted_doc_id]
-
             passage_dpr_score = normalized_dpr_sorted_scores[i]
             passage_node_id = self.node_name_to_vertex_idx[passage_node_key]
-
             passage_weights[passage_node_id] = passage_dpr_score * passage_node_weight
-            linking_score_map[passage_node_text] = passage_dpr_score * passage_node_weight
 
         #Combining phrase and passage scores into one array for PPR
         node_weights = phrase_weights + passage_weights
-
-        #Recording top 30 facts in linking_score_map
-        if len(linking_score_map) > 30:
-            linking_score_map = dict(sorted(linking_score_map.items(), key=lambda x: x[1], reverse=True)[:30])
 
         assert sum(node_weights) > 0, f'No phrases found in the graph for the given facts: {top_k_facts}'
 
@@ -277,10 +260,11 @@ class HippoRetrieval:
         self.passage_node_idxs = [igraph_name_to_idx[node_key] for node_key in self.passage_node_keys]
 
         for i in tqdm(range(qry_fact.shape[0]), desc="Retrieving", total=qry_fact.shape[0]):
-            scores = qry_fact[i].data
+            scores = min_max_normalize(qry_fact[i].data)
             sort_idx = np.argsort(scores)[::-1][:link_top_k]
+
             top_k_fact_indices, top_k_fact_scores = qry_fact[i].indices[sort_idx], scores[sort_idx]
-            top_k_facts = [facts[i] for i in sort_idx]
+            top_k_facts = [facts[i] for i in top_k_fact_indices]
             
             sorted_doc_ids, sorted_doc_scores = self.graph_search_with_fact_entities(link_top_k=link_top_k,
                                                                                      top_k_facts=top_k_facts,
@@ -295,67 +279,98 @@ class HippoRetrieval:
         return retrieval_results
 
 if __name__ == "__main__":
-    all_lbl_file = "/data/datasets/multihop/musique/XC/raw_data/label.raw.csv"
-    lbl_file = "/home/sasokan/suchith/HippoRAG/reproduce/dataset/musique/raw_data/label.raw.csv"
+    dataset_type = "musique-hipporag"
+    sample = False
+
+    # load label information
+
+    if dataset_type == "musique-hipporag":
+        all_lbl_file = "/data/datasets/multihop/musique/XC/raw_data/label.raw.csv"
+        lbl_file = "/home/sasokan/suchith/HippoRAG/reproduce/dataset/musique/raw_data/label.raw.csv"
+
+    elif dataset_type == "musique":
+        lbl_file = "/data/datasets/multihop/musique/XC/raw_data/label.raw.csv"
+
+    else:
+        raise ValueError("Invalid dataset type.")
+
+    lbl_ids, lbl_txt = load_raw_file(lbl_file)
+    if dataset_type == "musique-hipporag":
+        all_lbl_ids, all_lbl_txt = load_raw_file(all_lbl_file)
+        all_lbl_txt2idx = {k:i for i,k in enumerate(all_lbl_txt)}
+        valid_lbl_idx = [all_lbl_txt2idx[o] for o in lbl_txt]
     
+    # metadata files -- triples, facts, entities
+
     ent_file = "/data/datasets/multihop/musique/XC/raw_data/entity.raw.csv"
     lbl_triples_file = "/data/datasets/multihop/musique/XC/raw_data/label_triples.joblib"
     fact_file = "/data/datasets/multihop/musique/XC/raw_data/triples.joblib"
 
-    data_dir = "/data/suchith/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-001/"
-    qry_fact = sp.load_npz(f"{data_dir}/predictions/multihop/musique-hipporag/test_facts.npz")
-    qry_lbl = sp.load_npz(f"{data_dir}/predictions/multihop/musique-hipporag/test_labels.npz")
+    ent_ids, ent_txt = load_raw_file(ent_file)
+    facts = joblib.load(fact_file)
+
+    lbl_triples = joblib.load(lbl_triples_file)
+    if dataset_type == "musique-hipporag":
+        assert len(lbl_triples) == len(all_lbl_txt2idx)
+        lbl_triples = [lbl_triples[i] for i in valid_lbl_idx]
+
+    # model predictions -- facts and labels
+
+    data_dir = "/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-001/"
+    if dataset_type == "musique-hipporag":
+        qry_fact = sp.load_npz(f"{data_dir}/predictions/multihop/musique-hipporag/test_facts.npz")
+        qry_lbl = sp.load_npz(f"{data_dir}/predictions/multihop/musique-hipporag/test_labels.npz")
+    else:
+        qry_fact = sp.load_npz(f"{data_dir}/predictions/multihop/musique/test_facts.npz")
+        qry_lbl = sp.load_npz(f"{data_dir}/predictions/multihop/musique/test_labels.npz")
+
+    # entity-entity similarity
 
     data_dir = "/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-001/"
     ent_ent = retain_topk(sp.load_npz(f"{data_dir}/predictions/multihop/musique/entities_entities.npz"), k=100)
     ent_ent.data[ent_ent.data < 0.8] = 0.0
     ent_ent.eliminate_zeros()
 
-    lbl_ids, lbl_txt = load_raw_file(lbl_file)
-    all_lbl_ids, all_lbl_txt = load_raw_file(all_lbl_file)
-    lbl_txt2idx = {k:i for i,k in enumerate(all_lbl_txt)}
-    valid_lbl_idx = [lbl_txt2idx[o] for o in lbl_txt]
-
-    ent_ids, ent_txt = load_raw_file(ent_file)
-
-    lbl_triples = joblib.load(lbl_triples_file)
-    lbl_triples = [lbl_triples[i] for i in valid_lbl_idx]
-
-    facts = joblib.load(fact_file)
+    # compute hashes
 
     lbl_hash_ids = [compute_mdhash_id(content=o, prefix="label-") for o in lbl_txt]
     ent_hash_ids = [compute_mdhash_id(content=o, prefix="entity-") for o in ent_txt]
 
-    # # sampling
+    # sampling
 
-    # lbl_hash_ids = lbl_hash_ids[:1000]
-    # lbl_triples = lbl_triples[:1000]
+    n_samples = 1000
 
-    # entities = [chain(*[[k[0], k[2]] for k in o]) for o in lbl_triples]
-    # entities = chain(*[list(set(o)) for o in entities])
-    # ent_ids2idx = {k:i for i,k in enumerate(ent_hash_ids)}
-    # idxs = [ent_ids2idx[compute_mdhash_id(content=o, prefix="entity-")] for o in entities]
+    if sample:
+        lbl_hash_ids = lbl_hash_ids[:n_samples]
+        lbl_triples = lbl_triples[:n_samples]
 
-    # ent_hash_ids = [ent_hash_ids[i] for i in idxs]
-    # ent_ent = ent_ent[idxs][: , idxs]
+        entities = [chain(*[[k[0], k[2]] for k in o]) for o in lbl_triples]
+        entities = chain(*[list(set(o)) for o in entities])
+        ent_ids2idx = {k:i for i,k in enumerate(ent_hash_ids)}
+        idxs = [ent_ids2idx[compute_mdhash_id(content=o, prefix="entity-")] for o in entities]
 
-    # lbl_txt = lbl_txt[:1000]
-    # qry_lbl = qry_lbl[:, :1000]
+        ent_hash_ids = [ent_hash_ids[i] for i in idxs]
+        ent_ent = ent_ent[idxs][: , idxs]
 
-    # facts_ids2idx = {k:i for i,k in enumerate(facts)}
-    # facts = list(set([tuple(t) for o in lbl_triples for t in o]))
-    # idxs = [facts_ids2idx[f] for f in facts]
+        lbl_txt = lbl_txt[:n_samples]
+        qry_lbl = qry_lbl[:, :n_samples]
 
-    # qry_fact = qry_fact[:, idxs]
+        facts_ids2idx = {k:i for i,k in enumerate(facts)}
+        facts = list(set([tuple(t) for o in lbl_triples for t in o]))
+        idxs = [facts_ids2idx[f] for f in facts]
 
-    # idxs = np.where(np.logical_and(qry_fact.getnnz(axis=1) > 0, qry_lbl.getnnz(axis=1) > 0))[0]
-    # qry_fact, qry_lbl = qry_fact[idxs], qry_lbl[idxs]
+        qry_fact = qry_fact[:, idxs]
 
-    # # sampling
+        idxs = np.where(np.logical_and(qry_fact.getnnz(axis=1) > 0, qry_lbl.getnnz(axis=1) > 0))[0]
+        qry_fact, qry_lbl = qry_fact[idxs], qry_lbl[idxs]
+
+    # HipppoRAG retrieval
+
+    graph_file = "reproduce/graph_musique.joblib" if dataset_type == "musique" else "reproduce/graph_musique-hipporag.joblib"
 
     module = HippoRetrieval()
     print("Indexing ...")
-    module.index(lbl_hash_ids, lbl_triples, ent_hash_ids, ent_ent)
+    module.index(lbl_hash_ids, lbl_triples, ent_hash_ids, ent_ent, graph_file)
 
     print("Graph walk ...")
     results = module.retrieve(qry_fact, qry_lbl, ent_hash_ids, lbl_hash_ids, lbl_txt, facts, num_to_retrieve=200)
@@ -368,19 +383,29 @@ if __name__ == "__main__":
         indices.extend(i)
         indptr.append(len(indices))
     qry_pred = sp.csr_matrix((data, indices, indptr), dtype=np.float32, shape=qry_lbl.shape)
-    save_dir = "/data/suchith/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-001/"
-    sp.save_npz(f"{save_dir}/predictions/multihop/musique-hipporag/test_labels_hipporag.npz", qry_pred)
+
+    save_dir = "/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-001/"
+    if dataset_type == "musique-hipporag":
+        sp.save_npz(f"{save_dir}/predictions/multihop/musique-hipporag/test_labels_hipporag.npz", qry_pred)
+    else:
+        sp.save_npz(f"{save_dir}/predictions/multihop/musique/test_labels_hipporag.npz", qry_pred)
 
     # compute metrics
 
-    metric = PrecReclHits(len(lbl_txt), pk=10, rk=200, hk=10, rep_pk=[1, 3, 5, 10], rep_rk=[5, 10, 100, 200], rep_hk=[1, 3, 5, 10])
+    metric = PrecReclHits(len(lbl_txt), pk=10, rk=200, hk=10, rep_pk=[1, 3, 5, 10], rep_rk=[5, 10, 100, 200], 
+                          rep_hk=[1, 3, 5, 10])
     o = {
         'pred_idx': torch.tensor(qry_pred.indices, dtype=torch.int64),
         'pred_score': torch.tensor(qry_pred.data, dtype=torch.float32),
         'pred_ptr': torch.tensor([p-q for p,q in zip(qry_pred.indptr[1:], qry_pred.indptr)], dtype=torch.int64),
     }
-    gt = sp.load_npz("/home/sasokan/suchith/HippoRAG/reproduce/dataset/musique/tst_X_Y.npz")
+
+    if dataset_type == "musique-hipporag":
+        gt = sp.load_npz("/home/sasokan/suchith/HippoRAG/reproduce/dataset/musique/tst_X_Y.npz")
+    else:
+        gt = sp.load_npz("/data/datasets/multihop/musique/XC/tst_X_Y.npz")
     assert gt.shape == qry_pred.shape
+
     t = {
         'targ_idx': torch.tensor(gt.indices, dtype=torch.int64),
         'targ_score': torch.tensor(gt.data, dtype=torch.float32),
