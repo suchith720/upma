@@ -205,20 +205,19 @@ def personalized_node_rank(matrix:sp.csr_matrix, reset_dist:sp.csr_matrix, row_h
 if __name__ == "__main__":
 
     # data paths
-
     data_dir = "/data/suchith/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-001/"
 
     qry_fact_pred = sp.load_npz(f"{data_dir}/predictions/multihop/musique-hipporag/test_facts.npz")
-    qry_fact_pred = retain_topk(qry_fact_pred, k=6)
     min_max_normalize(qry_fact_pred)
+    qry_fact_pred = retain_topk(qry_fact_pred, k=5)
     qry_fact_pred.eliminate_zeros()
 
     qry_lbl_pred = sp.load_npz(f"{data_dir}/predictions/multihop/musique-hipporag/test_labels.npz")
     min_max_normalize(qry_lbl_pred)
     qry_lbl_pred.eliminate_zeros()
 
-    ent_top_k, ent_thresh = 200, 0.8
-    lbl_weight = 0.5
+    ent_top_k, ent_thresh = 100, 0.8
+    lbl_weight = 0.05
 
     # load data
 
@@ -232,6 +231,7 @@ if __name__ == "__main__":
     ent_ent = ent_ent + ent_ent_sim
 
     fact_ent = sp.load_npz("/data/datasets/multihop/musique/XC/entity_fact_X_Y.npz")
+    fact_ent.data[:] = 1.0
 
     lbl_file = "/home/sasokan/suchith/HippoRAG/reproduce/dataset/musique/raw_data/label.raw.csv"
     all_lbl_file = "/data/datasets/multihop/musique/XC/raw_data/label.raw.csv"
@@ -241,6 +241,7 @@ if __name__ == "__main__":
     valid_lbl_idx = [all_lbl_txt2idx[o] for o in lbl_txt]
 
     lbl_ent = sp.load_npz("/data/datasets/multihop/musique/XC/entity_lbl_X_Y.npz")
+    lbl_ent.data[:] = 1.0
     trn_lbl = sp.load_npz("/data/datasets/multihop/musique/XC/trn_X_Y.npz")
 
     lbl_ent = lbl_ent[valid_lbl_idx]
@@ -260,11 +261,17 @@ if __name__ == "__main__":
     assert np.all(qry_ent.indptr == qry_ent_cnt.indptr)
 
     qry_ent.data[:] = qry_ent.data / qry_ent_cnt.data
+    
+    ent_cnt = lbl_ent.getnnz(axis=0)
+    ent_cnt = np.where(ent_cnt > 0, ent_cnt, 1.0)
+    qry_ent = qry_ent / ent_cnt
+    qry_ent = qry_ent.tocsr()
+
+    qry_ent = retain_topk(qry_ent, k=5)
 
     ## label score
 
     qry_lbl_pred = qry_lbl_pred * lbl_weight
-
     qry_nodes = sp.hstack([qry_ent, qry_lbl_pred])
 
     # graph construction
@@ -283,7 +290,7 @@ if __name__ == "__main__":
     #                      p_reset=0.4, topk=None, batch_size=1024)
 
     results = personalized_node_rank(matrix, qry_nodes, row_head_thresh=500, col_head_thresh=500, walk_length=400, 
-                                     p_reset=0.8, topk=None, batch_size=1024, num_seed_nodes=200, is_homogeneous=True)
+                                     p_reset=0.5, topk=None, batch_size=1024, num_seed_nodes=200, is_homogeneous=True)
 
     qry_pred = results[:, qry_ent.shape[1]:]
 

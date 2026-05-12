@@ -1,4 +1,4 @@
-import scipy.sparse as sp, numpy as np, torch, os
+import scipy.sparse as sp, numpy as np, torch, os, joblib
 from numba import njit, prange
 
 from typing import Optional
@@ -12,8 +12,15 @@ from sugar.core import *
 from xcai.metrics import *
 from xcai.graph.random_walk import * 
 
+from hashlib import md5
+
+def compute_mdhash_id(content: str, prefix: str = "") -> str:
+    return prefix + md5(content.encode()).hexdigest()
+
 def min_max_normalize(x):
     for i,j in zip(x.indptr, x.indptr[1:]):
+        if i == j: continue
+
         min_val = np.min(x.data[i:j])
         max_val = np.max(x.data[i:j])
         range_val = max_val - min_val
@@ -36,6 +43,62 @@ def sample_weighted(indices, data, start, end):
     return indices[end - 1]
 
 
+# @njit(parallel=True, nogil=True)
+# def _random_walk(
+#     data_lbl_indices:np.ndarray, 
+#     data_lbl_indptr:np.ndarray, 
+#     data_lbl_data:np.ndarray, 
+#     lbl_data_indices:np.ndarray, 
+#     lbl_data_indptr:np.ndarray,
+#     lbl_data_data:np.ndarray,
+#     walk_to:int, 
+#     p_reset:float, 
+#     hops_per_step:int, 
+#     start:int, 
+#     end:int,
+#     is_homogeneous:bool,
+# ):
+#     n_data = end - start
+#     walk_length = 2*walk_to if is_homogeneous else walk_to
+# 
+#     nbr_idx = np.zeros((n_data, walk_length), dtype=np.int32)
+#     nbr_data = np.zeros((n_data, walk_length), dtype=np.float32)
+#     
+#     for idx in range(0, n_data):
+#         data_i = idx + start
+# 
+#         for walk in np.arange(0, walk_length, 2 if is_homogeneous else 1):
+#             if np.random.random() < p_reset: data_i = idx + start 
+#         
+#             # data --> label
+# 
+#             data_start, data_end = data_lbl_indptr[data_i], data_lbl_indptr[data_i+1]
+#             if data_start == data_end: continue
+#                 
+#             lbl_i = sample_weighted(data_lbl_indices, data_lbl_data, data_start, data_end)
+#             if lbl_i == -1: continue
+# 
+#             if hops_per_step == 1 or is_homogeneous: 
+#                 nbr_idx[idx, walk] = lbl_i
+#                 nbr_data[idx, walk] = 1
+#             
+#             if is_homogeneous: walk += 1
+# 
+#             # label --> data
+#             
+#             lbl_start, lbl_end = lbl_data_indptr[lbl_i], lbl_data_indptr[lbl_i+1]
+#             if lbl_start == lbl_end: continue
+# 
+#             data_i = sample_weighted(lbl_data_indices, lbl_data_data, lbl_start, lbl_end)
+#             if data_i == -1: continue
+#             
+#             if hops_per_step == 2 or is_homogeneous: 
+#                 nbr_idx[idx, walk] = data_i
+#                 nbr_data[idx, walk] = 1
+#             
+#     return nbr_idx.flatten(), nbr_data.flatten()
+
+
 @njit(parallel=True, nogil=True)
 def _random_walk(
     data_lbl_indices:np.ndarray, 
@@ -46,21 +109,18 @@ def _random_walk(
     lbl_data_data:np.ndarray,
     walk_to:int, 
     p_reset:float, 
-    hops_per_step:int, 
     start:int, 
     end:int,
-    is_homogeneous:bool,
 ):
     n_data = end - start
-    walk_length = 2*walk_to if is_homogeneous else walk_to
 
-    nbr_idx = np.zeros((n_data, walk_length), dtype=np.int32)
-    nbr_data = np.zeros((n_data, walk_length), dtype=np.float32)
+    nbr_idx = np.zeros((n_data, walk_to), dtype=np.int32)
+    nbr_data = np.zeros((n_data, walk_to), dtype=np.float32)
     
     for idx in range(0, n_data):
         data_i = idx + start
 
-        for walk in np.arange(0, walk_length, 2 if is_homogeneous else 1):
+        for walk in np.arange(0, walk_to):
             if np.random.random() < p_reset: data_i = idx + start 
         
             # data --> label
@@ -68,26 +128,11 @@ def _random_walk(
             data_start, data_end = data_lbl_indptr[data_i], data_lbl_indptr[data_i+1]
             if data_start == data_end: continue
                 
-            lbl_i = sample_weighted(data_lbl_indices, data_lbl_data, data_start, data_end)
-            if lbl_i == -1: continue
-
-            if hops_per_step == 1 or is_homogeneous: 
-                nbr_idx[idx, walk] = lbl_i
-                nbr_data[idx, walk] = 1
-            
-            if is_homogeneous: walk += 1
-
-            # label --> data
-            
-            lbl_start, lbl_end = lbl_data_indptr[lbl_i], lbl_data_indptr[lbl_i+1]
-            if lbl_start == lbl_end: continue
-
-            data_i = sample_weighted(lbl_data_indices, lbl_data_data, lbl_start, lbl_end)
+            data_i = sample_weighted(data_lbl_indices, data_lbl_data, data_start, data_end)
             if data_i == -1: continue
-            
-            if hops_per_step == 2 or is_homogeneous: 
-                nbr_idx[idx, walk] = data_i
-                nbr_data[idx, walk] = 1
+
+            nbr_idx[idx, walk] = data_i
+            nbr_data[idx, walk] = 1
             
     return nbr_idx.flatten(), nbr_data.flatten()
 
@@ -99,10 +144,44 @@ class PrunedWalk(graph.RandomWalk):
         self.data_lbl.sort_indices()
         self.data_lbl.eliminate_zeros()
 
-    def simulate(self, walk_to:Optional[int]=100, p_reset:Optional[float]=0.2, k:Optional[int]=None, hops_per_step:Optional[int]=2, 
-                 b_size:Optional[int]=1000, is_homogeneous:Optional[bool]=False):
-        assert hops_per_step == 1 or hops_per_step == 2, f"Invalid hops per step: {hops_per_step}"
-        
+    # def simulate(self, walk_to:Optional[int]=100, p_reset:Optional[float]=0.2, k:Optional[int]=None, hops_per_step:Optional[int]=2, 
+    #              b_size:Optional[int]=1000, is_homogeneous:Optional[bool]=False):
+    #     assert hops_per_step == 1 or hops_per_step == 2, f"Invalid hops per step: {hops_per_step}"
+    #     
+    #     data_lbl_indices, data_lbl_indptr, data_lbl_data = self.data_lbl.indices, self.data_lbl.indptr, self.data_lbl.data
+    #     
+    #     lbl_data = self.data_lbl.transpose().tocsr()
+    #     lbl_data.sort_indices()
+    #     lbl_data.eliminate_zeros()
+
+    #     lbl_data_indices, lbl_data_indptr, lbl_data_data = lbl_data.indices, lbl_data.indptr, lbl_data.data
+
+    #     n_data = self.data_lbl.shape[0]
+    #     n_lbl = self.data_lbl.shape[hops_per_step % 2]
+
+    #     walks = list()
+    #     for idx in tqdm(range(0, n_data, b_size)):
+    #         start, end = idx, min(idx+b_size, n_data)
+    #         cols, data = _random_walk(data_lbl_indices, data_lbl_indptr, data_lbl_data, lbl_data_indices, lbl_data_indptr, lbl_data_data,
+    #                                   walk_to, p_reset, hops_per_step, start=start, end=end, is_homogeneous=is_homogeneous)
+    #         
+    #         rows = np.arange(end-start).reshape(-1, 1)
+    #         rows = np.repeat(rows, 2 * walk_to if is_homogeneous else walk_to, axis=1).flatten()
+    #         
+    #         walk = sp.coo_matrix((data, (rows, cols)), dtype=np.float32, shape=(end-start, n_lbl))
+    #         walk.sum_duplicates()
+    #         walk = walk.tocsr()
+    #         walk.sort_indices()
+    #         
+    #         if k is not None: walk = xs.retain_topk(walk, k=k).tocsr()
+    #             
+    #         walks.append(walk)
+    #         del rows, cols
+    #         
+    #     return sp.vstack(walks, "csr")
+
+    def simulate(self, walk_to:Optional[int]=100, p_reset:Optional[float]=0.2, k:Optional[int]=None, b_size:Optional[int]=1000):
+
         data_lbl_indices, data_lbl_indptr, data_lbl_data = self.data_lbl.indices, self.data_lbl.indptr, self.data_lbl.data
         
         lbl_data = self.data_lbl.transpose().tocsr()
@@ -112,16 +191,16 @@ class PrunedWalk(graph.RandomWalk):
         lbl_data_indices, lbl_data_indptr, lbl_data_data = lbl_data.indices, lbl_data.indptr, lbl_data.data
 
         n_data = self.data_lbl.shape[0]
-        n_lbl = self.data_lbl.shape[hops_per_step % 2]
+        n_lbl = self.data_lbl.shape[1]
 
         walks = list()
         for idx in tqdm(range(0, n_data, b_size)):
             start, end = idx, min(idx+b_size, n_data)
             cols, data = _random_walk(data_lbl_indices, data_lbl_indptr, data_lbl_data, lbl_data_indices, lbl_data_indptr, lbl_data_data,
-                                      walk_to, p_reset, hops_per_step, start=start, end=end, is_homogeneous=is_homogeneous)
+                                      walk_to, p_reset, start=start, end=end)
             
             rows = np.arange(end-start).reshape(-1, 1)
-            rows = np.repeat(rows, 2 * walk_to if is_homogeneous else walk_to, axis=1).flatten()
+            rows = np.repeat(rows, walk_to, axis=1).flatten()
             
             walk = sp.coo_matrix((data, (rows, cols)), dtype=np.float32, shape=(end-start, n_lbl))
             walk.sum_duplicates()
@@ -140,13 +219,15 @@ def weighted_random_walk(matrix:sp.csr_matrix, row_head_thresh:Optional[int]=500
                          p_reset:Optional[float]=0.8, topk:Optional[int]=10, batch_size:Optional[int]=1023, is_homogeneous:Optional[bool]=False):
     matrix = matrix.tocsr()
     
-    idxs = np.where(matrix.getnnz(axis=1) > row_head_thresh)[0]
-    pruned_matrix = remove_rows(matrix, idxs) if len(idxs) > 0 else matrix
-        
-    idxs = np.where(matrix.getnnz(axis=0) > col_head_thresh)[0]
-    if len(idxs) > 0: pruned_matrix = remove_cols(pruned_matrix, idxs)
+    # idxs = np.where(matrix.getnnz(axis=1) > row_head_thresh)[0]
+    # pruned_matrix = remove_rows(matrix, idxs) if len(idxs) > 0 else matrix
+    #   
+    # idxs = np.where(matrix.getnnz(axis=0) > col_head_thresh)[0]
+    # if len(idxs) > 0: pruned_matrix = remove_cols(pruned_matrix, idxs)
     
-    return PrunedWalk(pruned_matrix).simulate(walk_length, p_reset, topk, 2, batch_size, is_homogeneous=is_homogeneous)
+    # return PrunedWalk(matrix).simulate(walk_length, p_reset, topk, 2, batch_size, is_homogeneous=is_homogeneous)
+
+    return PrunedWalk(matrix).simulate(walk_length, p_reset, topk, batch_size)
 
 
 def make_bidirectional_graph(matrix:sp.csr_matrix):
@@ -247,6 +328,16 @@ if __name__ == "__main__":
     # graph construction
 
     lbl_lbl = sp.csr_matrix((trn_lbl.shape[1], trn_lbl.shape[1]))
+
+    # load graph igraph
+
+    g = joblib.load("reproduce/graph_musique-hipporag.joblib")
+    graph = g.get_adjacency_sparse(attribute="weight")
+    vertex_txt = g.vs["name"]
+    lbl_hash_ids = [compute_mdhash_id(content=o, prefix="label-") for o in lbl_txt]
+    assert np.all([p == q for p,q in zip(vertex_txt[-len(lbl_hash_ids):], lbl_hash_ids)])
+
+    qry_nodes_2 = sp.load_npz("/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-001/predictions/multihop/musique-hipporag/node_weights.npz")
     
     mat_1 = sp.hstack([ent_ent, lbl_ent.T])
     mat_2 = sp.hstack([lbl_ent, lbl_lbl])
@@ -256,20 +347,20 @@ if __name__ == "__main__":
     if walk_file is not None and os.path.exists(walk_file):
         walks = sp.load_npz(walk_file)
     else:
-        walks = weighted_random_walk(matrix, row_head_thresh=500, col_head_thresh=500, walk_length=400, 
+        walks = weighted_random_walk(graph, row_head_thresh=500, col_head_thresh=500, walk_length=400, 
                                      p_reset=0.5, topk=None, batch_size=1024, is_homogeneous=True)
         if walk_file is not None: sp.save_npz(walk_file, walks)
 
-    # compute scores
+    # # compute scores
 
-    walk_length = walks.sum(axis=1)
-    walk_length[walk_length == 0] = 1
-    walks = walks / walk_length
+    # walk_length = walks.sum(axis=1)
+    # walk_length[walk_length == 0] = 1
+    # walks = walks / walk_length
 
-    qry_pred = qry_nodes @ walks
+    # qry_pred = qry_nodes @ walks
+    qry_pred = qry_nodes_2 @ walks
+
     qry_pred = qry_pred[:, qry_ent.shape[1]:]
-
-    qry_pred = qry_pred + qry_lbl_pred
 
     # compute metrics
 

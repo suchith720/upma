@@ -106,9 +106,9 @@ def create_fact_entity_graph(fact_txt:List, entity_txt:List, lbl_triples:List):
 
     return fact_ent
 
-def get_fact_examples(fact_txt:List, entity_txt:List, lbl_fact_mat:sp.csr_matrix, lbl_entity_mat:sp.csr_matrix):
+def get_fact_examples(fact_txt:List, entity_txt:List, lbl_fact_mat:sp.csr_matrix, lbl_entity_mat:sp.csr_matrix, num_examples:Optional[int]=20):
     lbl_ids, lbl_txt = load_raw_file("/data/datasets/multihop/musique/XC/raw_data/label.raw.csv")
-    idxs = np.random.permutation(len(lbl_txt))[:5]
+    idxs = np.random.permutation(len(lbl_txt))[:num_examples]
     examples = []
     for i in idxs:
         example = {
@@ -120,9 +120,9 @@ def get_fact_examples(fact_txt:List, entity_txt:List, lbl_fact_mat:sp.csr_matrix
     with open("/data/datasets/multihop/musique/examples/01-label_fact.json", "w") as file:
         json.dump(examples, file, indent=4)
 
-def get_entity_examples(entity_txt:List, ent_ent:sp.csr_matrix):
+def get_entity_examples(entity_txt:List, ent_ent:sp.csr_matrix, num_examples:Optional[int]=20):
     valid_idxs = np.where(ent_ent.getnnz(axis=1) > 0)[0]
-    idxs = np.random.permutation(len(valid_idxs))[:5]
+    idxs = np.random.permutation(len(valid_idxs))[:num_examples]
     idxs = valid_idxs[idxs]
     examples = []
     for i in idxs:
@@ -136,43 +136,56 @@ def get_entity_examples(entity_txt:List, ent_ent:sp.csr_matrix):
 
 if __name__ == "__main__":
 
-    # Load triples
+    display = True
+    process_data_flag = False
 
-    fname = "/data/datasets/multihop/musique/XC/raw_data/label_triples.joblib"
-    if os.path.exists(fname):
-        lbl_triples = joblib.load(fname)
-    else:
-        lbl_ids, lbl_triples = load_generations()
-        lbl_triples = preprocess_triples(lbl_triples)
-        joblib.dump(lbl_triples, fname)
+    if process_data_flag:
+        # Load triples
 
-    # Format facts
+        fname = "/data/datasets/multihop/musique/XC/raw_data/label_triples.joblib"
+        if os.path.exists(fname):
+            lbl_triples = joblib.load(fname)
+        else:
+            lbl_ids, lbl_triples = load_generations()
+            lbl_triples = preprocess_triples(lbl_triples)
+            joblib.dump(lbl_triples, fname)
 
-    lbl_fact_mat, fact_ids, triples = process_metadata(lbl_triples, prefix="fact")
-    fact_txt = [" ".join(o) for o in triples]
-    joblib.dump(triples, "/data/datasets/multihop/musique/XC/raw_data/triples.joblib")
+        # Format facts
 
-    sp.save_npz("/data/datasets/multihop/musique/XC/fact_lbl_X_Y.npz", lbl_fact_mat)
-    save_raw_file("/data/datasets/multihop/musique/XC/raw_data/fact.raw.csv", fact_ids, fact_txt)
+        lbl_fact_mat, fact_ids, triples = process_metadata(lbl_triples, prefix="fact")
+        fact_txt = [" ".join(o) for o in triples]
+        joblib.dump(triples, "/data/datasets/multihop/musique/XC/raw_data/triples.joblib")
 
-    # Format entities
+        sp.save_npz("/data/datasets/multihop/musique/XC/fact_lbl_X_Y.npz", lbl_fact_mat)
+        save_raw_file("/data/datasets/multihop/musique/XC/raw_data/fact.raw.csv", fact_ids, fact_txt)
 
-    lbl_entities = [chain(*[[k[0], k[2]] for k in o]) for o in lbl_triples]
-    lbl_entity_mat, entity_ids, entity_txt = process_metadata(lbl_entities, prefix="entity")
+        # Format entities
 
-    sp.save_npz("/data/datasets/multihop/musique/XC/entity_lbl_X_Y.npz", lbl_entity_mat)
-    save_raw_file("/data/datasets/multihop/musique/XC/raw_data/entity.raw.csv", entity_ids, entity_txt)
-    
-    ent_ent = create_entity_graph(entity_txt, lbl_triples)
-    sp.save_npz("/data/datasets/multihop/musique/XC/entity_entity_X_Y.npz", ent_ent)
+        lbl_entities = [chain(*[[k[0], k[2]] for k in o]) for o in lbl_triples]
+        lbl_entity_mat, entity_ids, entity_txt = process_metadata(lbl_entities, prefix="entity")
 
-    fact_ent = create_fact_entity_graph(triples, entity_txt, lbl_triples)
-    sp.save_npz("/data/datasets/multihop/musique/XC/entity_fact_X_Y.npz", fact_ent)
+        sp.save_npz("/data/datasets/multihop/musique/XC/entity_lbl_X_Y.npz", lbl_entity_mat)
+        save_raw_file("/data/datasets/multihop/musique/XC/raw_data/entity.raw.csv", entity_ids, entity_txt)
+        
+        ent_ent = create_entity_graph(entity_txt, lbl_triples)
+        sp.save_npz("/data/datasets/multihop/musique/XC/entity_entity_X_Y.npz", ent_ent)
 
-    # examples
+        fact_ent = create_fact_entity_graph(triples, entity_txt, lbl_triples)
+        sp.save_npz("/data/datasets/multihop/musique/XC/entity_fact_X_Y.npz", fact_ent)
 
-    get_fact_examples(fact_txt, entity_txt, lbl_fact_mat, lbl_entity_mat)
+    if display:
+        if not process_data_flag:
+            fact_ids, fact_txt = load_raw_file("/data/datasets/multihop/musique/XC/raw_data/fact.raw.csv")
+            entity_ids, entity_txt = load_raw_file("/data/datasets/multihop/musique/XC/raw_data/entity.raw.csv")
 
-    get_entity_examples(entity_txt, ent_ent)
+            lbl_entity_mat = sp.load_npz("/data/datasets/multihop/musique/XC/entity_lbl_X_Y.npz")
+            lbl_fact_mat = sp.load_npz("/data/datasets/multihop/musique/XC/fact_lbl_X_Y.npz")
+            ent_ent = sp.load_npz("/data/datasets/multihop/musique/XC/entity_entity_X_Y.npz")
+
+        # examples
+
+        get_fact_examples(fact_txt, entity_txt, lbl_fact_mat, lbl_entity_mat)
+
+        get_entity_examples(entity_txt, ent_ent)
 
 

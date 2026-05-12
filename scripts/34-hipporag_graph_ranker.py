@@ -32,7 +32,7 @@ class HippoRetrieval:
         self,
     ):
         self.graph = self.initialize_graph()
-        self.ent_node_to_chunk_ids = None
+        self.ent_node_to_lbl_ids, self.node_to_node_stats = None, None
 
     def initialize_graph(self, is_directed_graph:Optional[bool]=False):
         return ig.Graph(directed=is_directed_graph)
@@ -110,10 +110,11 @@ class HippoRetrieval:
         )
 
     def index(self, lbl_ids:List[str], lbl_triples:List[str], ent_ids:Optional[List]=None, ent_sim:Optional[sp.csr_matrix]=None, 
-              graph_file:Optional[str]=None):
+              graph_file:Optional[str]=None, stats_file:Optional[str]=None):
 
         if graph_file is not None and os.path.exists(graph_file):
             self.graph = joblib.load(graph_file)
+            self.node_to_node_stats, self.ent_node_to_lbl_ids = joblib.load(stats_file)
         else:
             self.node_to_node_stats = {}
             self.ent_node_to_lbl_ids = {}
@@ -128,7 +129,11 @@ class HippoRetrieval:
 
             self.augment_graph(ent_ids, lbl_ids)
 
-            if graph_file is not None: joblib.dump(self.graph, graph_file)
+            if graph_file is not None: 
+                joblib.dump(self.graph, graph_file)
+
+            if stats_file is not None: 
+                joblib.dump((self.node_to_node_stats, self.ent_node_to_lbl_ids), stats_file)
 
     def get_top_k_weights(
         self,
@@ -215,7 +220,7 @@ class HippoRetrieval:
 
         assert len(ppr_sorted_doc_ids) == len(self.passage_node_idxs), f"Doc prob length {len(ppr_sorted_doc_ids)} != corpus length {len(self.passage_node_idxs)}"
 
-        return ppr_sorted_doc_ids, ppr_sorted_doc_scores
+        return ppr_sorted_doc_ids, ppr_sorted_doc_scores, node_weights
 
     def run_ppr(
         self,
@@ -250,7 +255,7 @@ class HippoRetrieval:
         link_top_k:Optional[int]=5,
         passage_node_weight:Optional[float]=0.05,
     ):
-        retrieval_results = []
+        retrieval_results, retrieval_node_weights = [], []
 
         igraph_name_to_idx = {node["name"]: idx for idx, node in enumerate(self.graph.vs)} # from node key to the index in the backbone graph
         self.node_name_to_vertex_idx = igraph_name_to_idx
@@ -259,6 +264,7 @@ class HippoRetrieval:
         self.entity_node_idxs = [igraph_name_to_idx[node_key] for node_key in self.entity_node_keys]
         self.passage_node_idxs = [igraph_name_to_idx[node_key] for node_key in self.passage_node_keys]
 
+
         for i in tqdm(range(qry_fact.shape[0]), desc="Retrieving", total=qry_fact.shape[0]):
             scores = min_max_normalize(qry_fact[i].data)
             sort_idx = np.argsort(scores)[::-1][:link_top_k]
@@ -266,17 +272,18 @@ class HippoRetrieval:
             top_k_fact_indices, top_k_fact_scores = qry_fact[i].indices[sort_idx], scores[sort_idx]
             top_k_facts = [facts[i] for i in top_k_fact_indices]
             
-            sorted_doc_ids, sorted_doc_scores = self.graph_search_with_fact_entities(link_top_k=link_top_k,
-                                                                                     top_k_facts=top_k_facts,
-                                                                                     top_k_fact_scores=top_k_fact_scores,
-                                                                                     top_k_fact_indices=top_k_fact_indices,
-                                                                                     qry_lbl=qry_lbl[i],
-                                                                                     passage_node_weight=passage_node_weight)
+            sorted_doc_ids, sorted_doc_scores, node_weights = self.graph_search_with_fact_entities(link_top_k=link_top_k,
+                                                                                                   top_k_facts=top_k_facts,
+                                                                                                   top_k_fact_scores=top_k_fact_scores,
+                                                                                                   top_k_fact_indices=top_k_fact_indices,
+                                                                                                   qry_lbl=qry_lbl[i],
+                                                                                                   passage_node_weight=passage_node_weight)
+            retrieval_node_weights.append(node_weights)
 
             # top_k_docs = [self.passage_node_text[idx] for idx in sorted_doc_ids[:num_to_retrieve]]
             retrieval_results.append((sorted_doc_ids[:num_to_retrieve], sorted_doc_scores[:num_to_retrieve]))
 
-        return retrieval_results
+        return retrieval_results, np.vstack(retrieval_node_weights)
 
 if __name__ == "__main__":
     dataset_type = "musique-hipporag"
@@ -367,13 +374,14 @@ if __name__ == "__main__":
     # HipppoRAG retrieval
 
     graph_file = "reproduce/graph_musique.joblib" if dataset_type == "musique" else "reproduce/graph_musique-hipporag.joblib"
+    stats_file = "reproduce/stats_musique.joblib" if dataset_type == "musique" else "reproduce/stats_musique-hipporag.joblib"
 
     module = HippoRetrieval()
     print("Indexing ...")
-    module.index(lbl_hash_ids, lbl_triples, ent_hash_ids, ent_ent, graph_file)
+    module.index(lbl_hash_ids, lbl_triples, ent_hash_ids, ent_ent, graph_file, stats_file)
 
     print("Graph walk ...")
-    results = module.retrieve(qry_fact, qry_lbl, ent_hash_ids, lbl_hash_ids, lbl_txt, facts, num_to_retrieve=200)
+    results, node_weights = module.retrieve(qry_fact, qry_lbl, ent_hash_ids, lbl_hash_ids, lbl_txt, facts, num_to_retrieve=200)
 
     # save score matrix
 
@@ -387,6 +395,7 @@ if __name__ == "__main__":
     save_dir = "/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-001/"
     if dataset_type == "musique-hipporag":
         sp.save_npz(f"{save_dir}/predictions/multihop/musique-hipporag/test_labels_hipporag.npz", qry_pred)
+        sp.save_npz(f"{save_dir}/predictions/multihop/musique-hipporag/node_weights.npz", sp.csr_matrix(node_weights))
     else:
         sp.save_npz(f"{save_dir}/predictions/multihop/musique/test_labels_hipporag.npz", qry_pred)
 
