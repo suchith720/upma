@@ -338,7 +338,9 @@ if __name__ == "__main__":
     assert np.all([p == q for p,q in zip(vertex_txt[-len(lbl_hash_ids):], lbl_hash_ids)])
 
     qry_nodes_2 = sp.load_npz("/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-001/predictions/multihop/musique-hipporag/node_weights.npz")
-    
+    qry_nodes_2 = qry_nodes_2 / qry_nodes_2.sum(axis=1)
+    qry_nodes_2 = qry_nodes_2.tocsr()
+
     mat_1 = sp.hstack([ent_ent, lbl_ent.T])
     mat_2 = sp.hstack([lbl_ent, lbl_lbl])
     matrix = sp.vstack([mat_1, mat_2])
