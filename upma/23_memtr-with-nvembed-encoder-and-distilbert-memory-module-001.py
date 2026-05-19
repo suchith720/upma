@@ -6,30 +6,31 @@ from tqdm.auto import tqdm
 from xcai.basics import *
 from xcai.models.memtr import MEM001, MEMConfig
 
-def load_memtr_block(dataset:str, config_file:str, input_args:argparse.ArgumentParser, n_data_lnk_samples:Optional[int]=5, 
-                    n_lbl_lnk_samples:Optional[int]=5, n_neg_lnk_samples:Optional[int]=5, data_lnk_topk:Optional[int]=5, 
-                    lbl_lnk_topk:Optional[int]=5, neg_lnk_topk:Optional[int]=5, data_neg_topk:Optional[int]=None, 
-                    train_label_topk:Optional[int]=None, num_label_samples:Optional[int]=1):
+os.environ["WANDB_PROJECT"] = "06_memtr-msmarco-hipporag-facts"
+
+from sugar.core import *
+
+def load_memtr_block(dataset:str, config_file:str, input_args:argparse.ArgumentParser, 
+                     n_data_lnk_samples:Optional[int]=5, train_data_lnk_topk:Optional[int]=5, test_data_lnk_topk:Optional[int]=5, 
+
+                     train_negative_topk:Optional[int]=50, num_negative_samples:Optional[int]=1, 
+                     train_label_topk:Optional[int]=None, num_label_samples:Optional[int]=1):
+
     config_key, fname = get_config_key(config_file)
     pkl_file = get_pkl_file(input_args.pickle_dir, f"{dataset}_{fname}_distilbert-base-uncased", input_args.use_sxc_sampler,
                             input_args.exact, input_args.only_test)
 
-    train_data_meta_topk = {"lnk_meta": data_lnk_topk}
-    if data_neg_topk is not None: train_data_meta_topk.update({"neg_meta": data_neg_topk})
-
     os.makedirs(os.path.dirname(pkl_file), exist_ok=True)
     block = build_block(pkl_file, config_file, input_args.use_sxc_sampler, config_key, do_build=input_args.build_block, 
                         only_test=input_args.only_test, main_oversample=True, meta_oversample=True, return_scores=False, 
-                        n_slbl_samples=num_label_samples, train_label_topk=train_label_topk,
 
-                        n_sdata_meta_samples={"lnk_meta": n_data_lnk_samples, "neg_meta": 1},
-                        n_slbl_meta_samples={"lnk_meta": n_lbl_lnk_samples, "neg_meta": 1},
-                        n_sneg_meta_samples={"lnk_meta": n_neg_lnk_samples, "neg_meta": 1},
-                        
-                        train_data_meta_topk=train_data_meta_topk, test_data_meta_topk={"lnk_meta": data_lnk_topk}, 
-                        train_label_meta_topk={"lnk_meta": lbl_lnk_topk}, test_label_meta_topk={"lnk_meta": lbl_lnk_topk},
-                        train_neg_meta_topk={"lnk_meta": neg_lnk_topk}, test_neg_meta_topk={"lnk_meta": neg_lnk_topk}, 
-                        ignore_data_info=True, ignore_lbl_info=True)
+                        n_slbl_samples=num_label_samples, train_label_topk=train_label_topk,
+                        n_sneg_samples=num_negative_samples, train_negative_topk=train_negative_topk,
+
+                        n_sdata_meta_samples=n_data_lnk_samples, train_data_meta_topk=train_data_lnk_topk, 
+                        test_data_meta_topk=test_data_lnk_topk, 
+
+                        ignore_data_info=True, ignore_lbl_info=True, ignore_neg_info=True)
     
     train_dset, test_dset = None if block.train is None else block.train.dset, block.test.dset
 
@@ -69,12 +70,12 @@ def memtr_run(output_dir:str, input_args:argparse.ArgumentParser, mname:str, tes
         num_train_epochs=50,
         predict_with_representation=True,
         representation_search_type='BRUTEFORCE',
-        search_normalize=normalize,
+        search_normalize=True,
 
         adam_epsilon=1e-6,
         warmup_steps=1000,
         weight_decay=0.01,
-        learning_rate=6e-5,
+        learning_rate=1e-4,
         label_names=label_names,
 
         group_by_cluster=True,
@@ -89,7 +90,7 @@ def memtr_run(output_dir:str, input_args:argparse.ArgumentParser, mname:str, tes
         data_aug_meta_name="lnk",
         use_label_metadata=False,
 
-        metric_for_best_model='N@10',
+        metric_for_best_model='NDCG@10',
         load_best_model_at_end=True,
         target_indices_key='plbl2data_idx',
         target_pointer_key='plbl2data_data2ptr',
@@ -105,25 +106,29 @@ def memtr_run(output_dir:str, input_args:argparse.ArgumentParser, mname:str, tes
         use_saved_representation_for_indexing=use_saved_representation_for_indexing,
     )
 
+    trn_embeds = torch.load(train_embedding_file)
+    tst_embeds = torch.load(test_embedding_file)
+    lbl_embeds = torch.load(label_embedding_file)
+
+    # trn_embeds = torch.randn(1000, 1024, dtype=torch.float16)
+    # tst_embeds = torch.randn(test_dset.n_data, 1024, dtype=torch.float16)
+    # lbl_embeds = torch.randn(train_dset.n_lbl, 1024, dtype=torch.float16)
+
     config = MEMConfig(
         num_train_data=train_dset.n_data,
         num_test_data=test_dset.n_data,
-        num_labels=train_dset.n_lbl,
+        num_lbls=train_dset.n_lbl,
         num_metadata=train_dset.meta["lnk_meta"].n_meta,
         data_aug_meta_prefix="lnk2data",
-        base_model_dim=12,
+        base_model_dim=trn_embeds.shape[1],
         
         num_negatives=10,
         tau=0.1,
         reduction="mean",
     
         use_encoder_parallel=True,
-        loss_function="ranking",
+        loss_function="triplet",
     )
-
-    trn_embeds = torch.load(train_embedding_file)
-    tst_embeds = torch.load(test_embedding_file)
-    lbl_embeds = torch.load(label_embedding_file)
 
     def model_fn(mname:Optional[str]=None):
         model = MEM001.from_pretrained('distilbert-base-uncased', config=config)
@@ -134,7 +139,7 @@ def memtr_run(output_dir:str, input_args:argparse.ArgumentParser, mname:str, tes
 
     model = load_model(args.output_dir, model_fn, do_inference=check_inference_mode(input_args), use_pretrained=input_args.use_pretrained, 
                        update_config_during_inference=update_config_during_inference, config=config, type=load_model_type)
-        
+
     learn = XCLearner(
         model=model,
         args=args,
@@ -144,6 +149,24 @@ def memtr_run(output_dir:str, input_args:argparse.ArgumentParser, mname:str, tes
         compute_metrics=metric,
     )
 
+    # # debug
+    # 
+    # trn_ids, trn_txt = load_raw_file("/data/datasets/beir/msmarco/XC/raw_data/train.raw.csv")
+
+    # dl = learn.get_train_dataloader()
+    # batch = next(iter(dl))
+
+    # for idx in batch["data_idx"]:
+    #     print("Query ", idx.item(), " : ", trn_txt[idx])
+    #     print("-------")
+
+    # batch = batch.to(model.device)
+
+    # output = model(**batch)
+
+    # exit()
+    # # debug
+
     return main(learn, input_args, n_lbl=test_dset.n_lbl, save_dir_name=save_dir_name, 
                 resume_from_checkpoint=resume_from_checkpoint)
     
@@ -152,14 +175,20 @@ if __name__ == '__main__':
     input_args = parse_args()
 
     output_dir = "/data/suchith/outputs/upma/23_memtr-with-nvembed-encoder-and-distilbert-memory-module-001"
-
     input_args.use_sxc_sampler = True
     input_args.pickle_dir = "/data/suchith/datasets/processed/"
-    mname = "distilbert-base-uncased"
 
-    config_file = "configs/msmarco/hipporag/data_lbl_hipporag_nvembed-negatives-topk-05.json"
+    mname = "sentence-transformers/msmarco-distilbert-cos-v5"
+    # mname = "distilbert-base-uncased"
 
+    config_file = "configs/msmarco/hipporag/data_lbl_hipporag_nvembed-positives-thresh-98-top-5-negatives-thresh-70.json"
     train_dset, test_dset = load_memtr_block("msmarco", config_file, input_args)
 
-    memtr_run(output_dir, input_args, mname, test_dset, train_dset=train_dset, train_batch_size=128)
+    embedding_dir = "/data/suchith/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-001/representations/beir/msmarco/"
+    trn_embed_file = f"{embedding_dir}/trn_repr.pth"
+    tst_embed_file = f"{embedding_dir}/tst_repr.pth" 
+    lbl_embed_file = f"{embedding_dir}/lbl_repr.pth"
+
+    memtr_run(output_dir, input_args, mname, test_dset, train_dset=train_dset, train_batch_size=300, eval_batch_size=800,
+              train_embedding_file=trn_embed_file, test_embedding_file=tst_embed_file, label_embedding_file=lbl_embed_file)
 

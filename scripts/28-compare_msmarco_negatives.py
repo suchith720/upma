@@ -31,12 +31,18 @@ if __name__ == "__main__":
         return qry_neg
 
     # qry_neg_file = "/data/outputs/mogicX/54_nvembed-for-msmarco-001/matrices/msmarco/ce-negatives_trn_X_Y_thresh-70.npz"
-    qry_neg_file = "/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-001/predictions/beir/msmarco/negatives_trn_X_Y_normalize_thresh-70.npz"
-    qry_neg = load_mat(qry_neg_file, k=5) 
+    neg_dir = "/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-001/predictions/beir/msmarco/"
+    qry_neg_files = [
+        f"{neg_dir}/negatives_trn_X_Y_normalize_thresh-70.npz",
+        f"{neg_dir}/negatives_trn_X_Y_normalize_thresh-80.npz",
+        f"{neg_dir}/negatives_trn_X_Y_normalize_thresh-85.npz",
+    ]
+    qry_negs = [load_mat(f, k=5) for f in qry_neg_files]
 
-    assert qry_neg.shape[1] == len(neg_txt)
-    assert qry_neg.shape[0] == len(qry_txt)
-    assert qry_lbl.shape == qry_neg.shape
+    for qry_neg in qry_negs:
+        assert qry_neg.shape[1] == len(neg_txt)
+        assert qry_neg.shape[0] == len(qry_txt)
+        assert qry_lbl.shape == qry_neg.shape
 
     np.random.seed(1000)
 
@@ -48,16 +54,21 @@ if __name__ == "__main__":
 
     examples = []
     for i in tqdm(np.random.permutation(len(qry_ids))[:20]):
-        indices, scores = sorted_idx(qry_neg, i)
 
         examples.append({
             "index": int(i),
             "query": qry_txt[i],
             "labels": [(lbl_txt[p], float(q)) for p,q in zip(qry_lbl[i].indices, qry_lbl[i].data)],
-            "thresh 70 negatives": [(neg_txt[p], float(q)) for p,q in zip(indices, scores)],
         })
 
-        fname = "/home/sasokan/suchith/outputs/examples/13-msmarco_nvembedv2-negatives_thresh-70.json"
+        for t, qry_neg in zip([70, 80, 85], qry_negs):
+            indices, scores = sorted_idx(qry_neg, i)
+            examples[-1].update(
+                {
+                    f"thresh {t} negatives": [(neg_txt[p], float(q)) for p,q in zip(indices, scores)],
+            })
+
+        fname = "/home/sasokan/suchith/outputs/examples/15-msmarco_nvembedv2-negatives_thresh-70-80-85.json"
         with open(fname, "w") as file:
             json.dump(examples, file, indent=4)
 

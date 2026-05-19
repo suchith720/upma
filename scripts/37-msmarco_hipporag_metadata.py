@@ -4,7 +4,7 @@
 __all__ = []
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 3
-import os, torch,json, torch.multiprocessing as mp, joblib, numpy as np, scipy.sparse as sp, argparse
+import os, torch, json, joblib, numpy as np, scipy.sparse as sp, argparse
 from tqdm.auto import tqdm
 
 from xcai.basics import *
@@ -14,46 +14,47 @@ from xcai.misc import BEIR_DATASETS
 from xclib.utils.sparse import retain_topk
 import xclib.evaluation.xc_metrics as xm
 
+from sugar.core import *
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
 if __name__ == '__main__':
-
-    linker_dir = "/data/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002/predictions/" 
-
     example_dir = "/home/sasokan/suchith/outputs/examples/"
 
-    meta_file = "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/intent_substring/conflation_01/raw_data/intent.raw.csv"
-    meta_info = Info.from_txt(meta_file, info_column_names=["identifier", "input_text"])
+    # Loading metadata
+
+    # tst_ids, tst_txt = load_raw_file("/data/datasets/beir/msmarco/XC/raw_data/test.raw.csv")
+    tst_ids, tst_txt = load_raw_file("/data/datasets/beir/msmarco/XC/raw_data/train.raw.csv")
+    meta_ids, meta_txt = load_raw_file("/data/datasets/beir/msmarco/XC/raw_data/hipporag-fact.raw.csv")
+
+    # tst_meta = "/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-002/predictions/beir/msmarco/test_facts.npz" 
+    tst_meta = "/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-002/predictions/beir/msmarco/train_facts.npz" 
+    tst_meta = sp.load_npz(tst_meta)
+    tst_meta = retain_topk(tst_meta, k=5)
+
+    # Loading labels
+
+    lbl_ids, lbl_txt = load_raw_file("/data/datasets/beir/msmarco/XC/raw_data/label.raw.csv")
+    # tst_lbl = sp.load_npz("/data/datasets/beir/msmarco/XC/tst_X_Y.npz")
+    tst_lbl = sp.load_npz("/data/datasets/beir/msmarco/XC/trn_X_Y.npz")
+
+    # Storing examples
 
     def get_sorted_keys(mat, i):
         return sorted(zip(mat[i].indices, mat[i].data), key=lambda x: x[1], reverse=True)
 
-    def get_examples(data_lbl, data_info, lbl_info, tst_meta, meta_info, idxs):
-        examples = []
-        for i in idxs:
-            examples.append({
-                "query": data_info["input_text"][i],
-                "labels": [(lbl_info["input_text"][idx], float(sc)) for idx, sc in get_sorted_keys(data_lbl, i)],
-                "metadata": [(meta_info["input_text"][idx], float(sc)) for idx, sc in get_sorted_keys(tst_meta, i)],
-            })
-        return examples
-
-
-    config_file = f"/data/datasets/multihop/musique/XC/configs/data.json"
-    config_key, fname = get_config_key(config_file)
-    with open(config_file) as file:
-        config = json.load(file)[config_key]
-
-    lbl_info = Info.from_txt(config["path"]["test"]["lbl_info"] if "lbl_info" in config["path"]["test"] else config["path"]["train"]["lbl_info"], 
-                             info_column_names=["identifier", "input_text"]) 
-
-    tst_info = Info.from_txt(config["path"]["test"]["data_info"], info_column_names=["identifier", "input_text"]) 
-    tst_lbl = sp.load_npz(config["path"]["test"]["data_lbl"]) 
-
-    tst_meta = retain_topk(sp.load_npz(f"{linker_dir}/test_predictions_musique.npz"), k=5)
-
     idxs = np.random.permutation(tst_meta.shape[0])[:10]
-    examples = get_examples(tst_lbl, tst_info, lbl_info, tst_meta, meta_info, idxs)
-    with open(f"{example_dir}/05-musique_memory.json", "w") as file:
+
+    examples = []
+    for i in idxs:
+        examples.append({
+            "query": tst_txt[i],
+            "labels": [(lbl_txt[idx], float(sc)) for idx, sc in get_sorted_keys(tst_lbl, i)],
+            "metadata": [(meta_txt[idx], float(sc)) for idx, sc in get_sorted_keys(tst_meta, i)],
+        })
+
+    # with open(f"{example_dir}/15-msmarco_test_hipporag_metadata.json", "w") as file:
+    #     json.dump(examples, file, indent=4)
+
+    with open(f"{example_dir}/16-msmarco_train_hipporag_metadata.json", "w") as file:
         json.dump(examples, file, indent=4)
 
