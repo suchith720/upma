@@ -78,7 +78,7 @@ def memtr_run(output_dir:str, input_args:argparse.ArgumentParser, mname:str, tes
         learning_rate=1e-4,
         label_names=label_names,
 
-        group_by_cluster=True,
+        group_by_cluster=False,
         use_data_metadata_for_clustering=True,
         num_clustering_warmup_epochs=10,
         num_cluster_update_epochs=5,
@@ -104,6 +104,8 @@ def memtr_run(output_dir:str, input_args:argparse.ArgumentParser, mname:str, tes
 
         prefix_for_saved_representation_for_indexing=prefix_for_saved_representation_for_indexing,
         use_saved_representation_for_indexing=use_saved_representation_for_indexing,
+
+        clustering_devices=[1, 2, 3],
     )
 
     trn_embeds = torch.load(train_embedding_file)
