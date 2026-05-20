@@ -198,7 +198,7 @@ def main(do_inference=False):
     mini_batch_size = 8
     num_epochs = 1
     max_docs = None
-    num_negatives = None
+    num_negatives = 50
 
     dt = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
@@ -213,8 +213,8 @@ def main(do_inference=False):
     print("Model num labels:", model.num_labels)
 
     # 2. Load the MS MARCO dataset: https://huggingface.co/datasets/microsoft/ms_marco
-    config_key = "data-nvembed-hipporag-facts_lbl_nvembed-positives-thresh-98-top-5-negatives-thresh-70"
-    config_file = f"configs/msmarco/category/{config_key}.json"
+    config_key = "data_lbl_hipporag_nvembed-positives-thresh-98-top-5-negatives-thresh-70"
+    config_file = f"configs/msmarco/hipporag/{config_key}.json"
     with open(config_file) as file:
         config = json.load(file)[config_key]["path"]
 
@@ -232,7 +232,7 @@ def main(do_inference=False):
         train_dataset = _concatenate_datasets(pos_dataset, neg_dataset)
 
         # Evaluation dataset
-        pred_file = "/data/outputs/upma/09_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-008/predictions/test_predictions_msmarco.npz"
+        pred_file = "/data/suchith/outputs/upma/24_upma-meta-encoder-with-nvembed-hipporag-linker-for-msmarco-with-calibration-loss-001/predictions/test_predictions_msmarco.npz"
         lbl_file = "/data/datasets/beir/msmarco/XC/raw_data/label.raw.csv"
 
         test_dataset = get_positive_dataset(config["test"], use_meta=True)
