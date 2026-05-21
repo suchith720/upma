@@ -206,8 +206,11 @@ def main(do_inference=False):
     # Set the seed so the new classifier weights are identical in subsequent runs
     torch.manual_seed(12)
 
-    mname = sorted(os.listdir(output_dir))[-1]
-    model = CrossEncoder(f"{output_dir}/{mname}/final") if do_inference else CrossEncoder(model_name, num_labels=1)
+    if do_inference:
+        mname = sorted(os.listdir(output_dir))[-1]
+        model = CrossEncoder(f"{output_dir}/{mname}/final")    
+    else:
+        model = CrossEncoder(model_name, num_labels=1)
 
     print("Model max length:", model.max_length)
     print("Model num labels:", model.num_labels)
@@ -232,7 +235,7 @@ def main(do_inference=False):
         train_dataset = _concatenate_datasets(pos_dataset, neg_dataset)
 
         # Evaluation dataset
-        pred_file = "/data/suchith/outputs/upma/24_upma-meta-encoder-with-nvembed-hipporag-linker-for-msmarco-with-calibration-loss-001/predictions/test_predictions_msmarco.npz"
+        pred_file = "/data/outputs/upma/24_upma-meta-encoder-with-nvembed-hipporag-linker-for-msmarco-with-calibration-loss-001/predictions/test_predictions_msmarco.npz"
         lbl_file = "/data/datasets/beir/msmarco/XC/raw_data/label.raw.csv"
 
         test_dataset = get_positive_dataset(config["test"], use_meta=True)
@@ -340,7 +343,7 @@ def get_negative_inference(model, config):
     return _inference(model, config, "neg")
 
 def inference():
-    output_dir = "/data/outputs/upma/18_cross-encoder-training-ms-marco-lambda-hard-neg-006"
+    output_dir = "/data/outputs/upma/18_cross-encoder-training-ms-marco-lambda-hard-neg-007"
 
     mname = sorted(os.listdir(output_dir))[-1]
     model = CrossEncoder(f"{output_dir}/{mname}/final")
