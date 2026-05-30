@@ -78,7 +78,9 @@ if __name__ == '__main__':
             if input_args.exact else
             "configs/msmarco/intent_substring/data_lbl_ngame-gpt-intent-substring-conflation-01.json"
         )
+
         train_dset, test_dset = load_upma_block("msmarco", config_file, input_args)
+
         upma_run(output_dir, input_args, mname, test_dset, train_dset, train_batch_size=128, data_repr_pooling=False, 
                  memory_injection_layer=memory_injection_layer, use_calib_loss=True, calib_loss_weight=0.1)
 
