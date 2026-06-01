@@ -22,8 +22,14 @@ if __name__ == "__main__":
     # data_dir = f"/data/outputs/upma/{expt_name}/cross_predictions/16_beir-gpt-intent-substring-query-linker-with-ngame-loss-001/intent-conflation-01/"
     # meta_file = f"/data/outputs/upma/{expt_name}/cross_metrics/16_beir-gpt-intent-substring-query-linker-with-ngame-loss-001/intent-conflation-01/beir.json"
 
-    data_dir = "/data/outputs/mogicX/37_training-msmarco-distilbert-from-scratch-008/predictions/"
-    meta_file = "/data/outputs/mogicX/37_training-msmarco-distilbert-from-scratch-008/metrics/beir.json"
+    # data_dir = "/data/outputs/mogicX/37_training-msmarco-distilbert-from-scratch-008/predictions/"
+    # meta_file = "/data/outputs/mogicX/37_training-msmarco-distilbert-from-scratch-008/metrics/beir.json"
+
+    # data_dir = "/data/suchith/outputs/upma/25_early-fusion-with-category-metadata-gpt5-linker-for-msmarco-001/predictions/"
+    # meta_file = "/data/suchith/outputs/upma/25_early-fusion-with-category-metadata-gpt5-linker-for-msmarco-001/metrics/beir.json"
+
+    data_dir = "/data/suchith/outputs/upma/25_early-fusion-with-category-metadata-gpt5-linker-for-msmarco-002/predictions/"
+    meta_file = "/data/suchith/outputs/upma/25_early-fusion-with-category-metadata-gpt5-linker-for-msmarco-002/metrics/beir.json"
 
     metrics = dict()
 

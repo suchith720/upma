@@ -9,6 +9,8 @@ import os, torch, json, torch.multiprocessing as mp, joblib, numpy as np, scipy.
 from xcai.misc import *
 from xcai.basics import *
 
+from helper import *
+
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 5
 os.environ["WANDB_PROJECT"] = "07_ef-msmarco-gpt5-category"
 
@@ -23,7 +25,10 @@ if __name__ == '__main__':
     mname = "distilbert-base-uncased"
 
     if input_args.beir_mode:
-        pass
+        data_file = "/data/datasets/beir/metadata/{dataset}/raw_data/test_category-gpt5-linker.csv"
+        linker_name = "category-gpt5-linker"
+        early_fusion_beir_inference(output_dir, input_args, mname, data_file, linker_name, datasets=["webis-touche2020"], 
+                                    ignore_metadata=True)
 
     else:
         config_file = "/data/datasets/beir/metadata/msmarco/configs/data-category-gpt5-linker_lbl_ce-negatives-topk-05-linker_exact.json"
