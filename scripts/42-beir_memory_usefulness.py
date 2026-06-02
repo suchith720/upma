@@ -55,8 +55,7 @@ if __name__ == "__main__":
         return examples
 
     examples = []
-    examples.extend(get_examples("fever"))
-    examples.extend(get_examples("webis-touche2020"))
+    examples.extend(get_examples("hotpotqa"))
 
     fname = "/home/sasokan/suchith/outputs/examples/19-memory_useful_examples.json"
     with open(fname, "w") as file:
