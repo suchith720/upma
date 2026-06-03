@@ -26,7 +26,7 @@ if __name__ == '__main__':
     output_dir = "/data/outputs/upma/17_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-with-calibration-loss-001/"
 
     input_args.use_sxc_sampler = True
-    input_args.pickle_dir = "/data/suchith/datasets/processed/"
+    input_args.pickle_dir = "/data/suchith/datasets/processed/data/"
     mname = "distilbert-base-uncased"
 
     memory_injection_layer = 3
@@ -42,6 +42,7 @@ if __name__ == '__main__':
             metric_dir_name, pred_dir_name = "metrics", "predictions"
 
         elif expt_type == "no_memory":
+            print("Experiment: ", expt_type)
             linker_dir = "/home/sasokan/b-sprabhu/outputs/upma/07_msmarco-gpt-intent-substring-linker-with-ngame-loss-002/predictions/"
             update_config_during_inference, use_data_memory = True, False
             metric_dir_name, pred_dir_name = "cross_metrics/no-memory", "cross_predictions/no-memory"

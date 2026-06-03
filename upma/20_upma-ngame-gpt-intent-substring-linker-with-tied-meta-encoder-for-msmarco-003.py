@@ -150,10 +150,11 @@ if __name__ == '__main__':
     input_args = parse_args()
     extra_args = additional_args()
 
-    output_dir = "/home/sasokan/suchith/outputs/upma/20_upma-ngame-gpt-intent-substring-linker-with-tied-meta-encoder-for-msmarco-003"
+    output_dir = "/data/outputs/upma/20_upma-ngame-gpt-intent-substring-linker-with-tied-meta-encoder-for-msmarco-003"
 
     input_args.use_sxc_sampler = True
-    input_args.pickle_dir = "/data/suchith/datasets/processed/"
+    # input_args.pickle_dir = "/data/suchith/datasets/processed/"
+    input_args.pickle_dir = "/data/suchith/datasets/processed/data/"
     mname = "distilbert-base-uncased"
 
     n_memory_layers = memory_injection_layer = 3
