@@ -27,13 +27,15 @@ def beir_metric(
 if __name__ == "__main__":
 
     def get_examples(dataset):
-        file_1 = f"/data/outputs/mogicX/44_distilbert-gpt-category-linker-oracle-for-msmarco-005/predictions/test_predictions_{dataset}.npz"
+        # file_1 = f"/data/outputs/mogicX/44_distilbert-gpt-category-linker-oracle-for-msmarco-005/predictions/test_predictions_{dataset}.npz"
+        file_1 = f"/data/outputs/upma/26_early-fusion-with-hipporag-fact-exact-for-msmarco-001/predictions/test_predictions_{dataset}.npz"
         pred_lbl_1 = sp.load_npz(file_1)
 
         file_2 = f"/data/outputs/upma/20_upma-ngame-gpt-intent-substring-linker-with-tied-meta-encoder-for-msmarco-003/predictions/test_predictions_{dataset}.npz"
         pred_lbl_2 = sp.load_npz(file_2)
 
-        tst_ids, tst_txt = load_raw_file(f"/data/datasets/beir/metadata/{dataset}/raw_data/test_gpt-category-linker.raw.csv")
+        # tst_ids, tst_txt = load_raw_file(f"/data/datasets/beir/metadata/{dataset}/raw_data/test_gpt-category-linker.raw.csv")
+        tst_ids, tst_txt = load_raw_file(f"/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-003/raw_data/beir/{dataset}/test_hipporag-fact_topk-sorted.raw.txt")
         lbl_ids, lbl_txt = load_raw_file(f"/data/datasets/beir/{dataset}/XC/raw_data/label.raw.csv")
         tst_lbl = sp.load_npz(f"/data/datasets/beir/{dataset}/XC/tst_X_Y.npz")
 
@@ -55,9 +57,9 @@ if __name__ == "__main__":
         return examples
 
     examples = []
-    examples.extend(get_examples("hotpotqa"))
+    examples.extend(get_examples("scifact"))
 
-    fname = "/home/sasokan/suchith/outputs/examples/19-memory_useful_examples.json"
+    fname = "/home/sasokan/suchith/outputs/examples/20-hipporag_memory_useful_examples.json"
     with open(fname, "w") as file:
         json.dump(examples, file, indent=4)
 

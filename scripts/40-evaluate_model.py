@@ -28,8 +28,11 @@ if __name__ == "__main__":
     # data_dir = "/data/suchith/outputs/upma/25_early-fusion-with-category-metadata-gpt5-linker-for-msmarco-001/predictions/"
     # meta_file = "/data/suchith/outputs/upma/25_early-fusion-with-category-metadata-gpt5-linker-for-msmarco-001/metrics/beir.json"
 
-    data_dir = "/data/suchith/outputs/upma/25_early-fusion-with-category-metadata-gpt5-linker-for-msmarco-002/predictions/"
-    meta_file = "/data/suchith/outputs/upma/25_early-fusion-with-category-metadata-gpt5-linker-for-msmarco-002/metrics/beir.json"
+    # data_dir = "/data/suchith/outputs/upma/25_early-fusion-with-category-metadata-gpt5-linker-for-msmarco-002/predictions/"
+    # meta_file = "/data/suchith/outputs/upma/25_early-fusion-with-category-metadata-gpt5-linker-for-msmarco-002/metrics/beir.json"
+
+    data_dir = "/data/outputs/mogicX/44_distilbert-gpt-category-linker-oracle-for-msmarco-005/cross_predictions/nvembedv2-hipporag-fact-in-category-format/"
+    meta_file = "/data/outputs/mogicX/44_distilbert-gpt-category-linker-oracle-for-msmarco-005/cross_metrics/nvembedv2-hipporag-fact-in-category-format/beir.json"
 
     metrics = dict()
 
