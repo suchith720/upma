@@ -31,8 +31,12 @@ if __name__ == "__main__":
     # data_dir = "/data/suchith/outputs/upma/25_early-fusion-with-category-metadata-gpt5-linker-for-msmarco-002/predictions/"
     # meta_file = "/data/suchith/outputs/upma/25_early-fusion-with-category-metadata-gpt5-linker-for-msmarco-002/metrics/beir.json"
 
-    data_dir = "/data/outputs/mogicX/44_distilbert-gpt-category-linker-oracle-for-msmarco-005/cross_predictions/nvembedv2-hipporag-fact-in-category-format/"
-    meta_file = "/data/outputs/mogicX/44_distilbert-gpt-category-linker-oracle-for-msmarco-005/cross_metrics/nvembedv2-hipporag-fact-in-category-format/beir.json"
+    # data_dir = "/data/outputs/mogicX/44_distilbert-gpt-category-linker-oracle-for-msmarco-005/cross_predictions/nvembedv2-hipporag-fact-in-category-format/"
+    # meta_file = "/data/outputs/mogicX/44_distilbert-gpt-category-linker-oracle-for-msmarco-005/cross_metrics/nvembedv2-hipporag-fact-in-category-format/beir.json"
+
+    expt_name = "20_upma-ngame-gpt-intent-substring-linker-with-tied-meta-encoder-for-msmarco-003"
+    data_dir = f"/home/sasokan/suchith/outputs/upma/{expt_name}/cross_predictions/verify"
+    meta_file = f"/home/sasokan/suchith/outputs/upma/{expt_name}/cross_metrics/beir.json"
 
     metrics = dict()
 
@@ -50,6 +54,9 @@ if __name__ == "__main__":
 
         m = beir_metric(data_pred, data_lbl, tst_ids, lbl_ids)
         metrics[dataset] = m
+
+        print(dataset)
+        print(m)
 
     with open(meta_file, "w") as file:
         json.dump(metrics, file, indent=4)

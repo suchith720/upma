@@ -11,7 +11,7 @@ from typing import Optional, List
 def early_fusion_beir_inference(output_dir:str, input_args:argparse.ArgumentParser, mname:str, data_file_format:str, 
                                 linker_name:str, datasets:Optional[List]=None, metric_dir_name:Optional[str]="metrics", 
                                 pred_dir_name:Optional[str]=None, eval_batch_size:Optional[int]=1600, 
-                                ignore_metadata:Optional[bool]=False):
+                                ignore_metadata:Optional[bool]=False, search_normalize:Optional[bool]=False):
     
     metric_dir = f"{output_dir}/{metric_dir_name}"
     os.makedirs(metric_dir, exist_ok=True)
@@ -42,7 +42,8 @@ def early_fusion_beir_inference(output_dir:str, input_args:argparse.ArgumentPars
         trn_repr, tst_repr, lbl_repr, trn_pred, tst_pred, trn_metric, tst_metric = early_fusion_run(output_dir, input_args, mname, 
                                                                                                     test_dset, train_dset, 
                                                                                                     save_dir_name=pred_dir_name, 
-                                                                                                    eval_batch_size=eval_batch_size)
+                                                                                                    eval_batch_size=eval_batch_size, 
+                                                                                                    search_normalize=search_normalize)
         with open(f"{metric_dir}/{dataset_tag}.json", "w") as file:
             json.dump({dataset: tst_metric}, file, indent=4)
 

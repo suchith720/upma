@@ -20,27 +20,27 @@ DATASETS = [
     "scifact",
     "webis-touche2020",
     "trec-covid",
-    "cqadupstack/android",
-    "cqadupstack/english",
-    "cqadupstack/gaming",
-    "cqadupstack/gis",
-    "cqadupstack/mathematica",
-    "cqadupstack/physics",
-    "cqadupstack/programmers",
-    "cqadupstack/stats",
-    "cqadupstack/tex",
-    "cqadupstack/unix",
-    "cqadupstack/webmasters",
-    "cqadupstack/wordpress",
-    "fiqa",
-    "climate-fever",
-    "dbpedia-entity",
-    "fever",
-    "nfcorpus",
-    "nq",
-    "quora",
-    "hotpotqa",
-    "msmarco",
+    # "cqadupstack/android",
+    # "cqadupstack/english",
+    # "cqadupstack/gaming",
+    # "cqadupstack/gis",
+    # "cqadupstack/mathematica",
+    # "cqadupstack/physics",
+    # "cqadupstack/programmers",
+    # "cqadupstack/stats",
+    # "cqadupstack/tex",
+    # "cqadupstack/unix",
+    # "cqadupstack/webmasters",
+    # "cqadupstack/wordpress",
+    # "fiqa",
+    # "climate-fever",
+    # "dbpedia-entity",
+    # "fever",
+    # "nfcorpus",
+    # "nq",
+    # "quora",
+    # "hotpotqa",
+    # "msmarco",
 ]
 
 # %% ../nbs/00_ngame-for-msmarco-inference.ipynb 20
@@ -52,7 +52,11 @@ if __name__ == '__main__':
 
     input_args.use_sxc_sampler = True
     input_args.pickle_dir = "/data/suchith/datasets/processed/"
-    mname = "distilbert-base-uncased"
+
+    # mname = "distilbert-base-uncased"
+    # mname = "sentence-transformers/msmarco-distilbert-dot-v5"
+    # mname = "sentence-transformers/msmarco-distilbert-base-v4"
+    mname = "sentence-transformers/msmarco-distilbert-base-tas-b"
 
     if input_args.beir_mode:
         # data_file = "/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-003/raw_data/beir/{dataset}/test_hipporag-fact-label-cluster-samples_topk-sorted.raw.txt"
@@ -64,11 +68,17 @@ if __name__ == '__main__':
         # data_file = "/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-003/raw_data/beir/{dataset}/test_hipporag-fact-xc_topk-sorted.raw.txt"
         # linker_name = "hipporag-fact-xc-topk-sorted"
 
+        # data_file = "/data/datasets/beir/metadata/{dataset}/raw_data/test_category-gpt5-linker.csv"
+        # linker_name = "category-gpt5-linker"
+        # metric_dir_name, pred_dir_name = f"cross_metrics/{linker_name}", f"cross_predictions/{linker_name}"
+        # early_fusion_beir_inference(output_dir, input_args, mname, data_file, linker_name, datasets=DATASETS,
+        #                             ignore_metadata=False, metric_dir_name=metric_dir_name, pred_dir_name=pred_dir_name)
+
         data_file = "/data/datasets/beir/metadata/{dataset}/raw_data/test_category-gpt5-linker.csv"
-        linker_name = "category-gpt5-linker"
+        linker_name = os.path.basename(mname)
         metric_dir_name, pred_dir_name = f"cross_metrics/{linker_name}", f"cross_predictions/{linker_name}"
-        early_fusion_beir_inference(output_dir, input_args, mname, data_file, linker_name, datasets=DATASETS,
-                                    ignore_metadata=False, metric_dir_name=metric_dir_name, pred_dir_name=pred_dir_name)
+        early_fusion_beir_inference(output_dir, input_args, mname, data_file, linker_name, ignore_metadata=True, 
+                                    metric_dir_name=metric_dir_name, pred_dir_name=pred_dir_name, search_normalize=False)
 
     else:
         config_file = "/data/datasets/beir/metadata/msmarco/configs/data-hipporag-fact-exact_lbl_ce-negatives-topk-05-linker_exact.json"
