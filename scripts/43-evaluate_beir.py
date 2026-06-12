@@ -125,6 +125,9 @@ class UnifiedBEIRModel:
                     k: v[i : i + batch_size].to(self.device)
                     for k, v in features.items()
                 }
+                # Inject modality configurations for newer/custom sentence-transformers versions
+                batch_features["modality"] = "text"
+                batch_features["modality_name"] = "text"
                 with torch.no_grad():
                     batch_embeddings = self.parallel_model(**batch_features)
                     embeddings.append(batch_embeddings.cpu().numpy())
