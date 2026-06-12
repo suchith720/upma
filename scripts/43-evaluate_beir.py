@@ -13,6 +13,7 @@ from typing import List, Dict
 import numpy as np
 import torch
 import scipy.sparse as sp
+import json
 
 from sentence_transformers import SentenceTransformer
 from beir import util
@@ -33,21 +34,47 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Standard BEIR datasets
-STANDARD_BEIR_DATASETS = [
-    "scifact",
-    "nfcorpus",
-    "fiqa",
+BEIR_DATASETS = [
     "arguana",
     "scidocs",
-    "quora",
+    "scifact",
     "webis-touche2020",
     "trec-covid",
+    "cqadupstack/android",
+    "cqadupstack/english",
+    "cqadupstack/gaming",
+    "cqadupstack/gis",
+    "cqadupstack/mathematica",
+    "cqadupstack/physics",
+    "cqadupstack/programmers",
+    "cqadupstack/stats",
+    "cqadupstack/tex",
+    "cqadupstack/unix",
+    "cqadupstack/webmasters",
+    "cqadupstack/wordpress",
+    "fiqa",
+    "quora",
+    "msmarco",
     "climate-fever",
+    "dbpedia-entity",
     "fever",
     "hotpotqa",
+    "nfcorpus",
     "nq",
-    "dbpedia-entity",
 ]
+
+def collate_beir_metrics(metric_dir:str):
+    beir_metrics = {}
+    for dataset in BEIR_DATASETS:
+        dataset = dataset.replace("/", "-")
+        
+        fname = f"{metric_dir}/{dataset}.json"
+        if os.path.exists(fname):
+            with open(fname) as file:
+                beir_metrics.update(json.load(file))
+            
+    with open(f"{metric_dir}/beir.json", "w") as file:
+        json.dump(beir_metrics, file, indent=4)
 
 
 class DataParallelEncoder(torch.nn.Module):
@@ -197,7 +224,7 @@ def main():
         "--output_dir",
         type=str,
         default="./beir_evaluation",
-        help="Directory to save downloaded datasets and metrics.",
+        help="Directory to save downloaded datasets.",
     )
     parser.add_argument(
         "--batch_size",
@@ -215,6 +242,12 @@ def main():
         "--use_data_parallel",
         action="store_true",
         help="Use PyTorch DataParallel across multiple GPUs for faster encoding.",
+    )
+    parser.add_argument(
+        "--metric_dir",
+        type=str,
+        default="./beir_evaluation/metrics",
+        help="Directory to save metrics.",
     )
 
     args = parser.parse_args()
@@ -243,7 +276,7 @@ def main():
     # Determine datasets to evaluate
     datasets_to_run = args.datasets
     if len(datasets_to_run) == 1 and datasets_to_run[0].lower() == "all":
-        datasets_to_run = STANDARD_BEIR_DATASETS
+        datasets_to_run = BEIR_DATASETS
     logger.info(f"Datasets selected for evaluation: {datasets_to_run}")
 
     # Initialize model
@@ -263,7 +296,15 @@ def main():
     datasets_dir = os.path.join(args.output_dir, "datasets")
     os.makedirs(datasets_dir, exist_ok=True)
 
+    metric_dir = f"{args.metric_dir}/metrics"
+    os.makedirs(metric_dir, exist_ok=True)
+
+    pred_dir = f"{args.metric_dir}/predictions"
+    os.makedirs(pred_dir, exist_ok=True)
+                
     for dataset in datasets_to_run:
+        data_dir = f"/data/datasets/beir/{dataset}/XC/"
+
         logger.info(f"\n{'='*20} Evaluating {dataset} {'='*20}")
         try:
             # 1. Load dataset directly from Hugging Face
@@ -271,8 +312,6 @@ def main():
                 # Handle cqadupstack sub-datasets (e.g. cqadupstack/android)
                 sub_dataset = dataset.split("/")[-1]
                 logger.info(f"Loading cqadupstack sub-dataset '{sub_dataset}' directly from local blob storage...")
-
-                data_dir = f"/data/datasets/beir/{dataset}/XC/"
 
                 data_ids, data_txt = load_raw_file(f"{data_dir}/raw_data/test.raw.csv")
                 queries = [{"id":i, "text":t} for i,t in zip(data_ids, data_txt)]
@@ -339,19 +378,34 @@ def main():
             logger.info("Starting dense retrieval...")
             results = retriever.retrieve(corpus, queries)
 
+            dataset_prefix = dataset.replace("/", "-")
+                
+            data_ids, data_txt = load_raw_file(f"{data_dir}/raw_data/test.raw.csv")
+            lbl_ids, lbl_txt = load_raw_file(f"{data_dir}/raw_data/label.raw.csv")
+            lbl_ids2idx = {str(i):idx for idx,i in enumerate(lbl_ids)}
+            data, indices, indptr = [], [], [0]
+            for i in data_ids:
+                for l, sc in results[str(i)].items():
+                    data.append(sc)
+                    indices.append(lbl_ids2idx[l])
+                indptr.append(len(data))
+            pred_lbl = sp.csr_matrix((data, indices, indptr), dtype=np.float32, shape=(len(data_ids), len(lbl_ids)))
+            sp.save_npz(f"{pred_dir}/test_predictions_{dataset_prefix}.npz", pred_lbl)
+
             # 5. Evaluate and compute metrics
             logger.info("Computing metrics...")
             ndcg, _map, recall, precision = retriever.evaluate(
                 qrels, results, retriever.k_values, 
             )
+            mrr = retriever.evaluate_custom(qrels, results, retriever.k_values, metric="mrr")
 
-            # Record NDCG@10
-            ndcg_10 = ndcg.get("NDCG@10", 0.0)
-            ndcg_scores[dataset] = ndcg_10
-            logger.info(f"Results for {dataset}: NDCG@10 = {ndcg_10:.5f}")
-            for k in [1, 3, 5, 10]:
-                logger.info(f"NDCG@{k}: {ndcg.get(f'NDCG@{k}', 0.0):.5f}")
-                logger.info(f"Recall@{k}: {recall.get(f'Recall@{k}', 0.0):.5f}")
+            metrics = {}
+            for name, vals in [("NDCG", ndcg), ("Recall", recall), ("Precision", precision), ("MAP", _map), ("MRR", mrr)]:
+                for k, v in vals.items(): metrics.update({f"{name}@{k.split('@')[1]}": v})
+
+            with open(f"{metric_dir}/{dataset_prefix}.json", "w") as file:
+                json.dump({dataset: metrics}, file, indent=4)
+            ndcg_scores[dataset_prefix] = metrics["NDCG@10"]
 
         except Exception as e:
             logger.error(f"Failed to evaluate {dataset}: {str(e)}", exc_info=True)
@@ -366,6 +420,8 @@ def main():
         print(f"\nAverage NDCG@10: {avg_ndcg:.5f}")
     else:
         logger.warning("No datasets were successfully evaluated.")
+
+    collate_beir_metrics(metric_dir)
 
 
 if __name__ == "__main__":
