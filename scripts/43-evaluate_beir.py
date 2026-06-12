@@ -12,6 +12,7 @@ import logging
 from typing import List, Dict
 import numpy as np
 import torch
+import scipy.sparse as sp
 
 from sentence_transformers import SentenceTransformer
 from beir import util
@@ -19,6 +20,9 @@ from beir.datasets.data_loader import GenericDataLoader
 from beir.datasets.data_loader_hf import HFDataLoader
 from beir.retrieval.evaluation import EvaluateRetrieval
 from beir.retrieval.search.dense import DenseRetrievalExactSearch
+from tqdm.auto import tqdm
+
+from sugar.core import load_raw_file
 
 # Configure logging
 logging.basicConfig(
@@ -120,7 +124,7 @@ class UnifiedBEIRModel:
             logger.info("Encoding using PyTorch DataParallel...")
             embeddings = []
             features = self.model.tokenize(texts)
-            for i in range(0, len(texts), batch_size):
+            for i in tqdm(range(0, len(texts), batch_size)):
                 batch_features = {
                     k: v[i : i + batch_size].to(self.device) if isinstance(v, torch.Tensor) else v[i : i + batch_size]
                     for k, v in features.items()
@@ -265,14 +269,23 @@ def main():
             if "cqadupstack" in dataset:
                 # Handle cqadupstack sub-datasets (e.g. cqadupstack/android)
                 sub_dataset = dataset.split("/")[-1]
-                logger.info(f"Loading cqadupstack sub-dataset '{sub_dataset}' directly from HF datasets...")
-                from datasets import load_dataset as hf_load_dataset
-                hf_data = hf_load_dataset("BeIR/cqadupstack", sub_dataset)
-                corpus = hf_data["corpus"]
-                queries = hf_data["queries"]
-                # For qrels, check if 'test' or 'qrels' split is present
-                qrels_split = "test" if "test" in hf_data else "qrels"
-                qrels = hf_data[qrels_split]
+                logger.info(f"Loading cqadupstack sub-dataset '{sub_dataset}' directly from local blob storage...")
+
+                data_dir = f"/data/datasets/beir/{dataset}/XC/"
+
+                data_ids, data_txt = load_raw_file(f"{data_dir}/raw_data/test.raw.csv")
+                queries = [{"id":i, "text":t} for i,t in zip(data_ids, data_txt)]
+
+                lbl_ids, lbl_txt = load_raw_file(f"{data_dir}/raw_data/label.raw.csv")
+                corpus = [{"id":i, "text":t} for i,t in zip(lbl_ids, lbl_txt)]
+
+                data_lbl = sp.load_npz(f"{data_dir}/tst_X_Y.npz")
+
+                qrels = list()
+                for i,row in enumerate(data_lbl):
+                    for j,sc in zip(row.indices, row.data):
+                        qrels.append({"query_id":data_ids[i], "corpus_id":lbl_ids[j], "score": sc})
+
             else:
                 # Standard BEIR datasets load via HFDataLoader
                 logger.info(f"Loading dataset {dataset} directly from Hugging Face via BEIR HFDataLoader...")
