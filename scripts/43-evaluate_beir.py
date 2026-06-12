@@ -16,6 +16,7 @@ import torch
 from sentence_transformers import SentenceTransformer
 from beir import util
 from beir.datasets.data_loader import GenericDataLoader
+from beir.datasets.data_loader_hf import HFDataLoader
 from beir.retrieval.evaluation import EvaluateRetrieval
 from beir.retrieval.search.dense import DenseRetrievalExactSearch
 
@@ -223,15 +224,14 @@ def main():
     for dataset in datasets_to_run:
         logger.info(f"\n{'='*20} Evaluating {dataset} {'='*20}")
         try:
-            # 1. Download and unzip dataset
-            url = f"https://public.ukp.informatik.tu-darmstadt.de/recsys/thibaut/beir/datasets/{dataset}.zip"
-            logger.info(f"Downloading dataset {dataset} from {url}...")
-            data_path = util.download_and_unzip(url, datasets_dir)
-            logger.info(f"Dataset extracted to: {data_path}")
-
-            # 2. Load dataset
-            logger.info(f"Loading {dataset} using GenericDataLoader...")
-            corpus, queries, qrels = GenericDataLoader(data_folder=data_path).load(split="test")
+            # 1. Load dataset directly from Hugging Face via HFDataLoader
+            logger.info(f"Loading dataset {dataset} directly from Hugging Face via BEIR HFDataLoader...")
+            hf_repo = f"BeIR/{dataset}"
+            corpus, queries, qrels = HFDataLoader(
+                hf_repo=hf_repo,
+                streaming=False,
+                keep_in_memory=True
+            ).load(split="test")
             logger.info(f"Loaded {len(queries)} queries and {len(corpus)} corpus documents.")
 
             # Get batch size for this dataset
