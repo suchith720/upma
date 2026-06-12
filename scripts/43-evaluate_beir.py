@@ -46,6 +46,15 @@ STANDARD_BEIR_DATASETS = [
 ]
 
 
+class DataParallelEncoder(torch.nn.Module):
+    def __init__(self, st_model):
+        super().__init__()
+        self.st_model = st_model
+
+    def forward(self, **features):
+        return self.st_model(features)["sentence_embedding"]
+
+
 class UnifiedBEIRModel:
     """
     Wrapper for SentenceTransformer models to comply with BEIR's DenseRetrievalExactSearch interface.
@@ -59,10 +68,21 @@ class UnifiedBEIRModel:
         query_prefix: str = None,
         doc_prefix: str = None,
         device: str = None,
+        use_data_parallel: bool = False,
     ):
         logger.info(f"Loading SentenceTransformer model: {model_name} on device: {device}")
         self.model = SentenceTransformer(model_name, trust_remote_code=True, device=device)
         self.model_name = model_name.lower()
+        self.device = device
+        self.use_data_parallel = use_data_parallel
+
+        if self.use_data_parallel and torch.cuda.device_count() > 1:
+            logger.info(f"Initializing torch.nn.DataParallel across {torch.cuda.device_count()} GPUs...")
+            self.parallel_model = torch.nn.DataParallel(DataParallelEncoder(self.model))
+            self.parallel_model.to(device)
+        else:
+            self.use_data_parallel = False
+            self.parallel_model = None
 
         # Auto-detect model type if not explicitly set
         if model_type == "auto":
@@ -95,16 +115,32 @@ class UnifiedBEIRModel:
         logger.info(f"Using Query Prefix: {repr(self.query_prefix)}")
         logger.info(f"Using Document Prefix: {repr(self.doc_prefix)}")
 
+    def _encode_texts(self, texts: List[str], batch_size: int = 256) -> np.ndarray:
+        if self.use_data_parallel:
+            logger.info("Encoding using PyTorch DataParallel...")
+            embeddings = []
+            features = self.model.tokenize(texts)
+            for i in range(0, len(texts), batch_size):
+                batch_features = {
+                    k: v[i : i + batch_size].to(self.device)
+                    for k, v in features.items()
+                }
+                with torch.no_grad():
+                    batch_embeddings = self.parallel_model(**batch_features)
+                    embeddings.append(batch_embeddings.cpu().numpy())
+            return np.concatenate(embeddings, axis=0)
+        else:
+            return self.model.encode(
+                texts,
+                batch_size=batch_size,
+                show_progress_bar=True,
+                convert_to_numpy=True
+            )
+
     def encode_queries(self, queries: List[str], batch_size: int = 16, **kwargs) -> np.ndarray:
         logger.info(f"Encoding {len(queries)} queries with batch size {batch_size}...")
         prefixed_queries = [f"{self.query_prefix}{q}" for q in queries]
-        return self.model.encode(
-            prefixed_queries,
-            batch_size=batch_size,
-            show_progress_bar=True,
-            convert_to_numpy=True,
-            **kwargs
-        )
+        return self._encode_texts(prefixed_queries, batch_size=batch_size)
 
     def encode_corpus(self, corpus: List[Dict[str, str]], batch_size: int = 16, **kwargs) -> np.ndarray:
         logger.info(f"Encoding {len(corpus)} documents with batch size {batch_size}...")
@@ -114,14 +150,7 @@ class UnifiedBEIRModel:
             text = doc.get("text", "").strip()
             doc_text = f"{title} {text}".strip()
             docs.append(f"{self.doc_prefix}{doc_text}")
-
-        return self.model.encode(
-            docs,
-            batch_size=batch_size,
-            show_progress_bar=True,
-            convert_to_numpy=True,
-            **kwargs
-        )
+        return self._encode_texts(docs, batch_size=batch_size)
 
 
 def main():
@@ -175,6 +204,11 @@ def main():
         default=None,
         help="Device to use for encoding (e.g. 'cuda', 'mps', 'cpu'). If None, automatically detects.",
     )
+    parser.add_argument(
+        "--use_data_parallel",
+        action="store_true",
+        help="Use PyTorch DataParallel across multiple GPUs for faster encoding.",
+    )
 
     args = parser.parse_args()
 
@@ -212,6 +246,7 @@ def main():
         query_prefix=args.query_prefix,
         doc_prefix=args.doc_prefix,
         device=device,
+        use_data_parallel=args.use_data_parallel,
     )
 
     # Dictionary to keep track of results
@@ -278,7 +313,7 @@ def main():
             # 5. Evaluate and compute metrics
             logger.info("Computing metrics...")
             ndcg, _map, recall, precision = retriever.evaluate(
-                qrels, retriever.k_values, retriever.score_function
+                qrels, results, retriever.k_values
             )
 
             # Record NDCG@10
