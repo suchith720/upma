@@ -76,6 +76,7 @@ class UnifiedBEIRModel:
     ):
         logger.info(f"Loading SentenceTransformer model: {model_name} on device: {device}")
         self.model = SentenceTransformer(model_name, trust_remote_code=True, device=device)
+        self.model.max_seq_length = 512
         self.model_name = model_name.lower()
         self.device = device
         self.use_data_parallel = use_data_parallel
