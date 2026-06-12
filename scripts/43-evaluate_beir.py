@@ -262,14 +262,27 @@ def main():
     for dataset in datasets_to_run:
         logger.info(f"\n{'='*20} Evaluating {dataset} {'='*20}")
         try:
-            # 1. Load dataset directly from Hugging Face via HFDataLoader
-            logger.info(f"Loading dataset {dataset} directly from Hugging Face via BEIR HFDataLoader...")
-            hf_repo = f"BeIR/{dataset}"
-            corpus, queries, qrels = HFDataLoader(
-                hf_repo=hf_repo,
-                streaming=False,
-                keep_in_memory=True
-            ).load(split="test")
+            # 1. Load dataset directly from Hugging Face
+            if "cqadupstack" in dataset:
+                # Handle cqadupstack sub-datasets (e.g. cqadupstack/android)
+                sub_dataset = dataset.split("/")[-1]
+                logger.info(f"Loading cqadupstack sub-dataset '{sub_dataset}' directly from HF datasets...")
+                from datasets import load_dataset as hf_load_dataset
+                hf_data = hf_load_dataset("BeIR/cqadupstack", sub_dataset)
+                corpus = hf_data["corpus"]
+                queries = hf_data["queries"]
+                # For qrels, check if 'test' or 'qrels' split is present
+                qrels_split = "test" if "test" in hf_data else "qrels"
+                qrels = hf_data[qrels_split]
+            else:
+                # Standard BEIR datasets load via HFDataLoader
+                logger.info(f"Loading dataset {dataset} directly from Hugging Face via BEIR HFDataLoader...")
+                hf_repo = f"BeIR/{dataset}"
+                corpus, queries, qrels = HFDataLoader(
+                    hf_repo=hf_repo,
+                    streaming=False,
+                    keep_in_memory=True
+                ).load(split="test")
 
             # Convert queries to BEIR dictionary format if it is a Hugging Face Dataset
             if not isinstance(queries, dict):
