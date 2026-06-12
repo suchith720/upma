@@ -232,6 +232,36 @@ def main():
                 streaming=False,
                 keep_in_memory=True
             ).load(split="test")
+
+            # Convert queries to BEIR dictionary format if it is a Hugging Face Dataset
+            if not isinstance(queries, dict):
+                queries_dict = {}
+                for item in queries:
+                    qid = str(item.get("id", item.get("_id")))
+                    queries_dict[qid] = item.get("text", "")
+                queries = queries_dict
+
+            # Convert corpus to BEIR dictionary format if it is a Hugging Face Dataset
+            if not isinstance(corpus, dict):
+                corpus_dict = {}
+                for item in corpus:
+                    doc_id = str(item.get("id", item.get("_id")))
+                    corpus_dict[doc_id] = {
+                        "title": item.get("title", ""),
+                        "text": item.get("text", "")
+                    }
+                corpus = corpus_dict
+
+            # Convert qrels to BEIR dictionary format if it is a Hugging Face Dataset
+            if not isinstance(qrels, dict):
+                qrels_dict = {}
+                for item in qrels:
+                    qid = str(item.get("query-id", item.get("query_id")))
+                    did = str(item.get("corpus-id", item.get("corpus_id")))
+                    score = int(item.get("score", 1))
+                    qrels_dict.setdefault(qid, {})[did] = score
+                qrels = qrels_dict
+
             logger.info(f"Loaded {len(queries)} queries and {len(corpus)} corpus documents.")
 
             # Get batch size for this dataset
