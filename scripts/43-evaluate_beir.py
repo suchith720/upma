@@ -122,7 +122,7 @@ class UnifiedBEIRModel:
             features = self.model.tokenize(texts)
             for i in range(0, len(texts), batch_size):
                 batch_features = {
-                    k: v[i : i + batch_size].to(self.device)
+                    k: v[i : i + batch_size].to(self.device) if isinstance(v, torch.Tensor) else v[i : i + batch_size]
                     for k, v in features.items()
                 }
                 # Inject modality configurations for newer/custom sentence-transformers versions
@@ -154,7 +154,6 @@ class UnifiedBEIRModel:
             doc_text = f"{title} {text}".strip()
             docs.append(f"{self.doc_prefix}{doc_text}")
         return self._encode_texts(docs, batch_size=batch_size)
-
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate text embedding models on BEIR datasets.")
@@ -329,7 +328,7 @@ def main():
             # 5. Evaluate and compute metrics
             logger.info("Computing metrics...")
             ndcg, _map, recall, precision = retriever.evaluate(
-                qrels, results, retriever.k_values
+                qrels, results, retriever.k_values, 
             )
 
             # Record NDCG@10
