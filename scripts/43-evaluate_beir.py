@@ -308,7 +308,7 @@ def main():
         logger.info(f"\n{'='*20} Evaluating {dataset} {'='*20}")
         try:
             # 1. Load dataset directly from Hugging Face
-            if "cqadupstack" in dataset:
+            if "cqadupstack" in dataset or "msmarco" in dataset:
                 # Handle cqadupstack sub-datasets (e.g. cqadupstack/android)
                 sub_dataset = dataset.split("/")[-1]
                 logger.info(f"Loading cqadupstack sub-dataset '{sub_dataset}' directly from local blob storage...")
