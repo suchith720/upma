@@ -8,6 +8,8 @@ from xcai.metrics import *
 
 from sugar.core import *
 
+from xclib.utils.sparse import retain_topk
+
 if __name__ == "__main__":
 
     # expt_name = "17_upma-with-ngame-gpt-intent-substring-linker-for-msmarco-with-calibration-loss-001"
@@ -34,30 +36,41 @@ if __name__ == "__main__":
     # data_dir = "/data/outputs/mogicX/44_distilbert-gpt-category-linker-oracle-for-msmarco-005/cross_predictions/nvembedv2-hipporag-fact-in-category-format/"
     # meta_file = "/data/outputs/mogicX/44_distilbert-gpt-category-linker-oracle-for-msmarco-005/cross_metrics/nvembedv2-hipporag-fact-in-category-format/beir.json"
 
-    expt_name = "20_upma-ngame-gpt-intent-substring-linker-with-tied-meta-encoder-for-msmarco-003"
-    data_dir = f"/home/sasokan/suchith/outputs/upma/{expt_name}/cross_predictions/verify"
-    meta_file = f"/home/sasokan/suchith/outputs/upma/{expt_name}/cross_metrics/beir.json"
+    # expt_name = "20_upma-ngame-gpt-intent-substring-linker-with-tied-meta-encoder-for-msmarco-003"
+    # data_dir = f"/home/sasokan/suchith/outputs/upma/{expt_name}/cross_predictions/verify"
+    # meta_file = f"/home/sasokan/suchith/outputs/upma/{expt_name}/cross_metrics/beir.json"
+
+    data_dir = "/home/sasokan/suchith/outputs/upma/20_upma-ngame-gpt-intent-substring-linker-with-tied-meta-encoder-for-msmarco-003"
+    output_dir = f"{data_dir}/cross_predictions/hipporag-fact/"
+
+    metric_file = f"{data_dir}/cross_metrics/hipporag-fact/beir.json"
 
     metrics = dict()
 
     for dataset in tqdm(BEIR_DATASETS):
         dset_tag = dataset.replace("/", "-")
 
-        pred_file = f"{data_dir}/test_predictions_{dset_tag}.npz"
+        pred_file = f"{output_dir}/test_predictions_{dset_tag}.npz"
         if not os.path.exists(pred_file): continue
-
         data_pred = sp.load_npz(pred_file)
-        data_lbl = sp.load_npz(f"/data/datasets/beir/{dataset}/XC/tst_X_Y.npz")
+
+        # lbl_file = f"/data/datasets/beir/{dataset}/XC/tst_X_Y.npz"
+        lbl_file = f"/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-003/predictions/beir/{dataset}/test_hipporag-fact.npz"
+        if not os.path.exists(lbl_file): continue
+        data_lbl = retain_topk(sp.load_npz(lbl_file), k=5)
 
         tst_ids, tst_txt = load_raw_file(f"/data/datasets/beir/{dataset}/XC/raw_data/test.raw.csv")
-        lbl_ids, lbl_txt = load_raw_file(f"/data/datasets/beir/{dataset}/XC/raw_data/label.raw.csv")
 
-        m = beir_metric(data_pred, data_lbl, tst_ids, lbl_ids)
+        # lbl_file = f"/data/datasets/beir/{dataset}/XC/raw_data/label.raw.csv"
+        lbl_file = f"/data/datasets/beir/{dataset}/XC/raw_data/hipporag-fact.raw.csv"
+        lbl_ids, lbl_txt = load_raw_file(lbl_file)
+
+        m = beir_metric(data_pred, data_lbl, tst_ids, lbl_ids, k_values=[5, 10, 100, 200])
         metrics[dataset] = m
 
         print(dataset)
         print(m)
 
-    with open(meta_file, "w") as file:
+    with open(metric_file, "w") as file:
         json.dump(metrics, file, indent=4)
 
