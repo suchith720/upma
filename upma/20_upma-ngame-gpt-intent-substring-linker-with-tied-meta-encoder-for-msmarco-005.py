@@ -66,6 +66,106 @@ def upma_beir_inference(output_dir:str, input_args:argparse.ArgumentParser, mnam
 
     collate_beir_metrics(metric_dir)
 
+
+def upma_beir_metadata_inference(output_dir:str, input_args:argparse.ArgumentParser, mname:str, save_file_name:str, 
+                                 meta_file:str, pred_meta_file:Optional[str]=None, datasets:Optional[List]=None, 
+                                 pred_dir_name:Optional[str]=None, use_task_specific_metadata:Optional[bool]=False, 
+                                 meta_sequence_length:Optional[int]=64, get_data_predictions:Optional[bool]=True, 
+                                 get_label_predictions:Optional[bool]=False, get_meta_predictions:Optional[bool]=False, 
+                                 normalize:Optional[bool]=True, use_layer_norm:Optional[bool]=True, eval_batch_size:Optional[int]=800, 
+                                 model_type:Optional[str]="best", data_repr_pooling:Optional[bool]=True, 
+                                 memory_injection_layer:Optional[Union[int, List]]=6, memory_type:Optional[Union[str, List]]="embeddings", 
+                                 n_memory_layers:Optional[int]=3, use_data_memory:Optional[bool]=True, use_label_memory:Optional[bool]=False, 
+                                 num_input_metadata:Optional[int]=5, use_calib_loss:Optional[bool]=False, calib_loss_weight:Optional[float]=0.1, 
+                                 metric_dir_name:Optional[str]="metrics", update_config_during_inference:Optional[bool]=False, 
+                                 tie_memory_encoder_weights:Optional[bool]=False, exclude_module_from_tying:Optional[str]=None):
+    
+    metric_dir = f"{output_dir}/{metric_dir_name}"
+    os.makedirs(metric_dir, exist_ok=True)
+
+    input_args.only_test = input_args.do_test_inference = input_args.save_test_prediction = True
+    
+    # meta-data
+    if not use_task_specific_metadata:
+        meta_info = load_info(f"{input_args.pickle_dir}/{save_file_name}.joblib", f"/data/datasets/beir/msmarco/XC/{meta_file}",
+                              mname, sequence_length=meta_sequence_length)
+
+    os.makedirs(f"{input_args.pickle_dir}/beir/", exist_ok=True)
+
+    datasets = BEIR_DATASETS if datasets is None else datasets
+    for dataset in tqdm(datasets):
+        print(dataset)
+        dataset_prefix = dataset.replace("/", "-")
+
+        # load metadata
+        if use_task_specific_metadata:
+            fname = f"/data/datasets/beir/{dataset}/XC/{meta_file}"
+            if os.path.exists(fname):
+                meta_info = load_info(f"{input_args.pickle_dir}/beir/{save_file_name}/{dataset_prefix}.joblib",
+                                      fname, mname, sequence_length=meta_sequence_length)
+            else:
+                print(f"WARNING:: Missing raw file at {fname}. Dataset '{dataset_prefix}' will be skipped.")
+                continue
+
+        # load data
+        test_dset = None
+        if get_data_predictions:
+            input_args.do_test_inference = input_args.save_test_prediction = True
+            test_info = load_info(f"{input_args.pickle_dir}/beir/{dataset_prefix}.joblib", f"/data/datasets/beir/{dataset}/XC/raw_data/test.raw.csv",
+                                  mname, sequence_length=32)
+            test_dset = SXCDataset(SMainXCDataset(data_info=test_info, lbl_info=meta_info))
+
+        # load label
+        label_dset = None
+        if get_label_predictions:
+            input_args.do_label_inference = input_args.save_label_prediction = True
+            lbl_info = load_info(f"{input_args.pickle_dir}/beir/{dataset_prefix}-label.joblib", 
+                                 f"/data/datasets/beir/{dataset}/XC/raw_data/label.raw.csv",
+                                 mname, sequence_length=128)
+            label_dset = SXCDataset(SMainXCDataset(data_info=lbl_info, lbl_info=meta_info))
+
+        # load prediction metadata
+        meta_dset = None
+        if get_meta_predictions:
+            input_args.do_meta_inference = input_args.save_meta_prediction = True
+            
+            meta_name = pred_meta_file.strip("/").split("/")
+            meta_name = "-".join(meta_name[:-2] + [meta_name[-1].split(".")[0]]).replace("_", "-")
+            input_args.save_meta_name, pred_dir_name = meta_name, f"predictions/{meta_name}"
+            
+            fname = f"/data/datasets/beir/{dataset}/XC/{pred_meta_file}"
+            if os.path.exists(fname):
+                pred_meta_info = load_info(f"{input_args.pickle_dir}/beir/{meta_name}/{dataset_prefix}.joblib",
+                                           fname, mname, sequence_length=64)
+            else:
+                print(f"WARNING:: Missing raw file at {fname}. Dataset '{dataset_prefix}' will be skipped.")
+                continue
+            meta_dset = SXCDataset(SMainXCDataset(data_info=pred_meta_info, lbl_info=meta_info))
+
+        input_args.prediction_suffix = dataset_prefix
+        trn_repr, tst_repr, lbl_repr, trn_pred, tst_pred, trn_metric, tst_metric = upma_run(output_dir, input_args, mname, test_dset, 
+                                                                                            eval_batch_size=eval_batch_size, 
+                                                                                            save_dir_name=pred_dir_name, 
+                                                                                            data_repr_pooling=data_repr_pooling, 
+                                                                                            memory_injection_layer=memory_injection_layer, 
+                                                                                            use_data_memory=use_data_memory, 
+                                                                                            use_label_memory=use_label_memory, 
+                                                                                            memory_type=memory_type, 
+                                                                                            n_memory_layers=n_memory_layers, 
+                                                                                            num_input_metadata=num_input_metadata, 
+                                                                                            use_calib_loss=use_calib_loss, 
+                                                                                            calib_loss_weight=calib_loss_weight, 
+                                                                                            update_config_during_inference=update_config_during_inference, 
+                                                                                            tie_memory_encoder_weights=tie_memory_encoder_weights, 
+                                                                                            exclude_module_from_tying=exclude_module_from_tying, 
+                                                                                            dataset=dataset)
+        
+        with open(f"{metric_dir}/{dataset_prefix}.json", "w") as file:
+            json.dump({dataset: tst_metric}, file, indent=4)
+
+    collate_beir_metrics(metric_dir)
+
+
 # %% ../nbs/37_training-msmarco-distilbert-from-scratch.ipynb 21
 if __name__ == '__main__':
     input_args = parse_args()
@@ -78,9 +178,16 @@ if __name__ == '__main__':
     use_data_memory = False
 
     if input_args.beir_mode:
-        metric_dir_name, pred_dir_name = "cross_metrics/verify", "cross_predictions/verify"
-        upma_beir_inference(output_dir, input_args, mname, eval_batch_size=400, metric_dir_name=metric_dir_name, pred_dir_name=pred_dir_name,
-                            data_repr_pooling=False, use_data_memory=use_data_memory)
+        # metric_dir_name, pred_dir_name = "cross_metrics/verify", "cross_predictions/verify"
+        # upma_beir_inference(output_dir, input_args, mname, eval_batch_size=400, metric_dir_name=metric_dir_name, pred_dir_name=pred_dir_name,
+        #                     data_repr_pooling=False, use_data_memory=use_data_memory)
+
+        meta_file = "raw_data/hipporag-fact.raw.csv"
+
+        metric_dir_name, pred_dir_name = "cross_metrics/hipporag-fact", "cross_predictions/hipporag-fact"
+        upma_beir_metadata_inference(output_dir, input_args, mname, "distilbert-hipporag-fact", meta_file=meta_file, use_task_specific_metadata=True,
+                                     eval_batch_size=400, metric_dir_name=metric_dir_name, pred_dir_name=pred_dir_name, data_repr_pooling=False, 
+                                     use_data_memory=use_data_memory)
 
     else:
         config_file = (
