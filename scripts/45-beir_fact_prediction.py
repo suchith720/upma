@@ -23,7 +23,9 @@ from beir.retrieval.evaluation import EvaluateRetrieval
 from beir.retrieval.search.dense import DenseRetrievalExactSearch
 from tqdm.auto import tqdm
 
+from xcai.misc import BEIR_DATASETS
 from sugar.core import load_raw_file
+from xclib.utils.sparse import retain_topk
 
 # Configure logging
 logging.basicConfig(
@@ -34,7 +36,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Standard BEIR datasets
-BEIR_DATASETS = [
+DATASETS = [
     "arguana",
     "scidocs",
     "scifact",
@@ -54,7 +56,7 @@ BEIR_DATASETS = [
     "cqadupstack/wordpress",
     "fiqa",
     "quora",
-    # "msmarco",
+    "msmarco",
     "climate-fever",
     "dbpedia-entity",
     "fever",
@@ -276,7 +278,7 @@ def main():
     # Determine datasets to evaluate
     datasets_to_run = args.datasets
     if len(datasets_to_run) == 1 and datasets_to_run[0].lower() == "all":
-        datasets_to_run = BEIR_DATASETS
+        datasets_to_run = DATASETS
     logger.info(f"Datasets selected for evaluation: {datasets_to_run}")
 
     # Initialize model
@@ -296,45 +298,33 @@ def main():
     datasets_dir = os.path.join(args.output_dir, "datasets")
     os.makedirs(datasets_dir, exist_ok=True)
 
-    metric_dir = f"{args.metric_dir}/metrics"
+    metric_dir = f"{args.metric_dir}/cross_metrics/hipporag_fact/"
     os.makedirs(metric_dir, exist_ok=True)
 
-    pred_dir = f"{args.metric_dir}/predictions"
+    pred_dir = f"{args.metric_dir}/cross_predictions/hipporag_fact/"
     os.makedirs(pred_dir, exist_ok=True)
                 
     for dataset in datasets_to_run:
         data_dir = f"/data/datasets/beir/{dataset}/XC/"
+        data_lbl_dir = f"/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-003/predictions/beir/{dataset}/"
 
         logger.info(f"\n{'='*20} Evaluating {dataset} {'='*20}")
         try:
-            # 1. Load dataset directly from Hugging Face
-            if "cqadupstack" in dataset or "msmarco" in dataset:
-                # Handle cqadupstack sub-datasets (e.g. cqadupstack/android)
-                sub_dataset = dataset.split("/")[-1]
-                logger.info(f"Loading cqadupstack sub-dataset '{sub_dataset}' directly from local blob storage...")
+            # 1. Load dataset
+            data_ids, data_txt = load_raw_file(f"{data_dir}/raw_data/test.raw.csv")
+            queries = [{"id":i, "text":t} for i,t in zip(data_ids, data_txt)]
 
-                data_ids, data_txt = load_raw_file(f"{data_dir}/raw_data/test.raw.csv")
-                queries = [{"id":i, "text":t} for i,t in zip(data_ids, data_txt)]
+            lbl_file = f"{data_dir}/raw_data/hipporag-fact.raw.csv"
+            if not os.path.exists(lbl_file): continue
+            lbl_ids, lbl_txt = load_raw_file(lbl_file)
+            corpus = [{"id":i, "text":t} for i,t in zip(lbl_ids, lbl_txt)]
 
-                lbl_ids, lbl_txt = load_raw_file(f"{data_dir}/raw_data/label.raw.csv")
-                corpus = [{"id":i, "text":t} for i,t in zip(lbl_ids, lbl_txt)]
+            data_lbl = retain_topk(sp.load_npz(f"{data_lbl_dir}/test_hipporag-fact.npz"), k=5)
 
-                data_lbl = sp.load_npz(f"{data_dir}/tst_X_Y.npz")
-
-                qrels = list()
-                for i,row in enumerate(data_lbl):
-                    for j,sc in zip(row.indices, row.data):
-                        qrels.append({"query_id":data_ids[i], "corpus_id":lbl_ids[j], "score": sc})
-
-            else:
-                # Standard BEIR datasets load via HFDataLoader
-                logger.info(f"Loading dataset {dataset} directly from Hugging Face via BEIR HFDataLoader...")
-                hf_repo = f"BeIR/{dataset}"
-                corpus, queries, qrels = HFDataLoader(
-                    hf_repo=hf_repo,
-                    streaming=False,
-                    keep_in_memory=True
-                ).load(split="test")
+            qrels = list()
+            for i,row in enumerate(data_lbl):
+                for j,sc in zip(row.indices, row.data):
+                    qrels.append({"query_id":data_ids[i], "corpus_id":lbl_ids[j], "score": sc})
 
             # Convert queries to BEIR dictionary format if it is a Hugging Face Dataset
             if not isinstance(queries, dict):
@@ -380,8 +370,6 @@ def main():
 
             dataset_prefix = dataset.replace("/", "-")
                 
-            data_ids, data_txt = load_raw_file(f"{data_dir}/raw_data/test.raw.csv")
-            lbl_ids, lbl_txt = load_raw_file(f"{data_dir}/raw_data/label.raw.csv")
             lbl_ids2idx = {str(i):idx for idx,i in enumerate(lbl_ids)}
             data, indices, indptr = [], [], [0]
             for i in data_ids:

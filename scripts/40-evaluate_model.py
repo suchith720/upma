@@ -57,7 +57,8 @@ if __name__ == "__main__":
         # lbl_file = f"/data/datasets/beir/{dataset}/XC/tst_X_Y.npz"
         lbl_file = f"/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-003/predictions/beir/{dataset}/test_hipporag-fact.npz"
         if not os.path.exists(lbl_file): continue
-        data_lbl = retain_topk(sp.load_npz(lbl_file), k=5)
+        data_lbl = retain_topk(sp.load_npz(lbl_file), k=20)
+        data_lbl.data[:] = 1.0
 
         tst_ids, tst_txt = load_raw_file(f"/data/datasets/beir/{dataset}/XC/raw_data/test.raw.csv")
 
@@ -65,8 +66,9 @@ if __name__ == "__main__":
         lbl_file = f"/data/datasets/beir/{dataset}/XC/raw_data/hipporag-fact.raw.csv"
         lbl_ids, lbl_txt = load_raw_file(lbl_file)
 
-        m = beir_metric(data_pred, data_lbl, tst_ids, lbl_ids, k_values=[5, 10, 100, 200])
-        metrics[dataset] = m
+        # m = recall(data_pred, data_lbl, k=200, repk=[5, 10, 100, 200])
+        m = beir_metric(data_pred, data_lbl, tst_ids, lbl_ids, k_values=[1, 3, 5, 10, 100, 200])
+        metrics[dataset] = {k:float(v) for k,v in m.items()}
 
         print(dataset)
         print(m)
