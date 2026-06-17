@@ -320,6 +320,7 @@ def main():
             corpus = [{"id":i, "text":t} for i,t in zip(lbl_ids, lbl_txt)]
 
             data_lbl = retain_topk(sp.load_npz(f"{data_lbl_dir}/test_hipporag-fact.npz"), k=5)
+            data_lbl.data[:] = 1.0
 
             qrels = list()
             for i,row in enumerate(data_lbl):
