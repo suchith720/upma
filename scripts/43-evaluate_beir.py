@@ -54,7 +54,7 @@ BEIR_DATASETS = [
     "cqadupstack/wordpress",
     "fiqa",
     "quora",
-    # "msmarco",
+    "msmarco",
     "climate-fever",
     "dbpedia-entity",
     "fever",
@@ -386,8 +386,11 @@ def main():
             data, indices, indptr = [], [], [0]
             for i in data_ids:
                 for l, sc in results[str(i)].items():
-                    data.append(sc)
-                    indices.append(lbl_ids2idx[l])
+                    if l in lbl_ids2idx:
+                        data.append(sc)
+                        indices.append(lbl_ids2idx[l])
+                    else:
+                        print(f"Invalid label predicted: {l}")
                 indptr.append(len(data))
             pred_lbl = sp.csr_matrix((data, indices, indptr), dtype=np.float32, shape=(len(data_ids), len(lbl_ids)))
             sp.save_npz(f"{pred_dir}/test_predictions_{dataset_prefix}.npz", pred_lbl)
