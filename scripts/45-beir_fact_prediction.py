@@ -251,6 +251,12 @@ def main():
         default="./beir_evaluation/metrics",
         help="Directory to save metrics.",
     )
+    parser.add_argument(
+        "--pred_suffix",
+        type=str,
+        default=None,
+        help="Suffix of the prediction file.",
+    )
 
     args = parser.parse_args()
 
@@ -303,6 +309,8 @@ def main():
 
     pred_dir = f"{args.metric_dir}/cross_predictions/hipporag_fact/"
     os.makedirs(pred_dir, exist_ok=True)
+
+    pred_suffix = "" if args.pred_suffix is None else f"_{args.pred_suffix}"
                 
     for dataset in datasets_to_run:
         data_dir = f"/data/datasets/beir/{dataset}/XC/"
@@ -314,18 +322,22 @@ def main():
             data_ids, data_txt = load_raw_file(f"{data_dir}/raw_data/test.raw.csv")
             queries = [{"id":i, "text":t} for i,t in zip(data_ids, data_txt)]
 
-            lbl_file = f"{data_dir}/raw_data/hipporag-fact.raw.csv"
+            lbl_file = f"{data_dir}/raw_data/hipporag-fact{pred_suffix}.raw.csv"
             if not os.path.exists(lbl_file): continue
             lbl_ids, lbl_txt = load_raw_file(lbl_file)
             corpus = [{"id":i, "text":t} for i,t in zip(lbl_ids, lbl_txt)]
 
-            data_lbl = retain_topk(sp.load_npz(f"{data_lbl_dir}/test_hipporag-fact.npz"), k=5)
-            data_lbl.data[:] = 1.0
+            data_lbl_file = f"{data_lbl_dir}/test_hipporag-fact{pred_suffix}.npz"
+            data_lbl = None
+            if os.path.exists(data_lbl_file):
+                data_lbl = retain_topk(sp.load_npz(data_lbl_file), k=5)
+                data_lbl.data[:] = 1.0
 
             qrels = list()
-            for i,row in enumerate(data_lbl):
-                for j,sc in zip(row.indices, row.data):
-                    qrels.append({"query_id":data_ids[i], "corpus_id":lbl_ids[j], "score": sc})
+            if data_lbl is not None:
+                for i,row in enumerate(data_lbl):
+                    for j,sc in zip(row.indices, row.data):
+                        qrels.append({"query_id":data_ids[i], "corpus_id":lbl_ids[j], "score": sc})
 
             # Convert queries to BEIR dictionary format if it is a Hugging Face Dataset
             if not isinstance(queries, dict):
@@ -347,14 +359,15 @@ def main():
                 corpus = corpus_dict
 
             # Convert qrels to BEIR dictionary format if it is a Hugging Face Dataset
-            if not isinstance(qrels, dict):
-                qrels_dict = {}
-                for item in qrels:
-                    qid = str(item.get("query-id", item.get("query_id")))
-                    did = str(item.get("corpus-id", item.get("corpus_id")))
-                    score = int(item.get("score", 1))
-                    qrels_dict.setdefault(qid, {})[did] = score
-                qrels = qrels_dict
+            if data_lbl is not None:
+                if not isinstance(qrels, dict):
+                    qrels_dict = {}
+                    for item in qrels:
+                        qid = str(item.get("query-id", item.get("query_id")))
+                        did = str(item.get("corpus-id", item.get("corpus_id")))
+                        score = int(item.get("score", 1))
+                        qrels_dict.setdefault(qid, {})[did] = score
+                    qrels = qrels_dict
 
             logger.info(f"Loaded {len(queries)} queries and {len(corpus)} corpus documents.")
 
@@ -379,22 +392,23 @@ def main():
                     indices.append(lbl_ids2idx[l])
                 indptr.append(len(data))
             pred_lbl = sp.csr_matrix((data, indices, indptr), dtype=np.float32, shape=(len(data_ids), len(lbl_ids)))
-            sp.save_npz(f"{pred_dir}/test_predictions_{dataset_prefix}.npz", pred_lbl)
+            sp.save_npz(f"{pred_dir}/test_predictions_{dataset_prefix}{pred_suffix}.npz", pred_lbl)
 
             # 5. Evaluate and compute metrics
             logger.info("Computing metrics...")
-            ndcg, _map, recall, precision = retriever.evaluate(
-                qrels, results, retriever.k_values, 
-            )
-            mrr = retriever.evaluate_custom(qrels, results, retriever.k_values, metric="mrr")
+            if data_lbl is not None:
+                ndcg, _map, recall, precision = retriever.evaluate(
+                    qrels, results, retriever.k_values, 
+                )
+                mrr = retriever.evaluate_custom(qrels, results, retriever.k_values, metric="mrr")
 
-            metrics = {}
-            for name, vals in [("NDCG", ndcg), ("Recall", recall), ("Precision", precision), ("MAP", _map), ("MRR", mrr)]:
-                for k, v in vals.items(): metrics.update({f"{name}@{k.split('@')[1]}": v})
+                metrics = {}
+                for name, vals in [("NDCG", ndcg), ("Recall", recall), ("Precision", precision), ("MAP", _map), ("MRR", mrr)]:
+                    for k, v in vals.items(): metrics.update({f"{name}@{k.split('@')[1]}": v})
 
-            with open(f"{metric_dir}/{dataset_prefix}.json", "w") as file:
-                json.dump({dataset: metrics}, file, indent=4)
-            ndcg_scores[dataset_prefix] = metrics["NDCG@10"]
+                with open(f"{metric_dir}/{dataset_prefix}{pred_suffix}.json", "w") as file:
+                    json.dump({dataset: metrics}, file, indent=4)
+                ndcg_scores[dataset_prefix] = metrics["NDCG@10"]
 
         except Exception as e:
             logger.error(f"Failed to evaluate {dataset}: {str(e)}", exc_info=True)
