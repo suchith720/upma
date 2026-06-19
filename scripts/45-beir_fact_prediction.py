@@ -304,10 +304,10 @@ def main():
     datasets_dir = os.path.join(args.output_dir, "datasets")
     os.makedirs(datasets_dir, exist_ok=True)
 
-    metric_dir = f"{args.metric_dir}/cross_metrics/hipporag_fact/"
+    metric_dir = f"{args.metric_dir}/cross_metrics/hipporag-fact/"
     os.makedirs(metric_dir, exist_ok=True)
 
-    pred_dir = f"{args.metric_dir}/cross_predictions/hipporag_fact/"
+    pred_dir = f"{args.metric_dir}/cross_predictions/hipporag-fact/"
     os.makedirs(pred_dir, exist_ok=True)
 
     pred_suffix = "" if args.pred_suffix is None else f"_{args.pred_suffix}"
@@ -375,7 +375,8 @@ def main():
             dataset_batch_size = batch_size_map.get(dataset, default_batch_size)
 
             # 3. Initialize BEIR dense retrieval exact search wrapper
-            model_wrapper = DenseRetrievalExactSearch(model, batch_size=dataset_batch_size)
+            model_wrapper = DenseRetrievalExactSearch(model, batch_size=dataset_batch_size, 
+                                                      show_progress_bar=True, corpus_chunk_size=500_000)
             retriever = EvaluateRetrieval(model_wrapper, score_function="cos_sim")
 
             # 4. Perform retrieval

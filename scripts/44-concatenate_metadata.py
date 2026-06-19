@@ -9,17 +9,24 @@ from xclib.utils.sparse import retain_topk
 
 
 def early_concate_metadata(data_dir:str, output_dir:str, dset_type:str, dset_name:str, meta_order:Optional[str]="sorted", 
-                           meta_name:Optional[str]="fact", data_type:Optional[str]="test"):
+                           meta_name:Optional[str]="fact", data_type:Optional[str]="test", file_suffix:Optional[str]=None):
+
+    file_suffix = "" if file_suffix is None else f"_{file_suffix}"
 
     data_file = f"{data_dir}/{dset_type}/{dset_name}/XC/raw_data/{data_type}.raw.csv"
     data_ids, data_txt = load_raw_file(data_file)
 
-    meta_file = f"{data_dir}/{dset_type}/{dset_name}/XC/raw_data/{meta_name}.raw.csv"
-    if not os.path.exists(meta_file): return
+    meta_file = f"{data_dir}/{dset_type}/{dset_name}/XC/raw_data/{meta_name}{file_suffix}.raw.csv"
+    if not os.path.exists(meta_file): 
+        print(f"Invalid file: {meta_file}")
+        return
     meta_ids, meta_txt = load_raw_file(meta_file)
 
     dset_tag = dset_name.replace('/', '-')
-    dm_file = f"{output_dir}/cross_predictions/{meta_name}/test_predictions_{dset_tag}.npz"
+    dm_file = f"{output_dir}/cross_predictions/{meta_name}/test_predictions_{dset_tag}{file_suffix}.npz"
+    if not os.path.exists(dm_file):
+        print(f"Invalid file: {dm_file}")
+        return
     data_meta = retain_topk(sp.load_npz(dm_file), k=5)
 
     assert len(data_ids) == data_meta.shape[0]
@@ -45,11 +52,11 @@ def early_concate_metadata(data_dir:str, output_dir:str, dset_type:str, dset_nam
     os.makedirs(save_dir, exist_ok=True)
 
     if meta_order == "sorted":
-        raw_file = f"{save_dir}/{data_type}_{meta_name}_topk-sorted_{dset_tag}.raw.txt"
-        exp_file = f"{save_dir}/examples_{meta_name}_topk-sorted_{dset_tag}.json"
+        raw_file = f"{save_dir}/{data_type}_{meta_name}_topk-sorted_{dset_tag}{file_suffix}.raw.txt"
+        exp_file = f"{save_dir}/examples_{meta_name}_topk-sorted_{dset_tag}{file_suffix}.json"
     elif meta_order == "random":
-        raw_file = f"{save_dir}/{data_type}_{meta_name}_topk-random_{dset_tag}.raw.txt"
-        exp_file = f"{save_dir}/examples_{meta_name}_topk-random_{dset_tag}.json"
+        raw_file = f"{save_dir}/{data_type}_{meta_name}_topk-random_{dset_tag}{file_suffix}.raw.txt"
+        exp_file = f"{save_dir}/examples_{meta_name}_topk-random_{dset_tag}{file_suffix}.json"
 
     save_raw_file(raw_file, data_ids, aug_txt)
 
@@ -73,10 +80,14 @@ def early_concate_metadata(data_dir:str, output_dir:str, dset_type:str, dset_nam
 
 
 if __name__ == "__main__":
-    data_dir, dset_type = "/data/datasets/", "beir"
-    output_dir = "/home/sasokan/suchith/outputs/upma/20_upma-ngame-gpt-intent-substring-linker-with-tied-meta-encoder-for-msmarco-003/"
+    # data_dir, dset_type = "/data/datasets/", "beir"
+    # output_dir = "/home/sasokan/suchith/outputs/upma/20_upma-ngame-gpt-intent-substring-linker-with-tied-meta-encoder-for-msmarco-003/"
 
-    for dset_name in tqdm(BEIR_DATASETS):
+    data_dir, dset_type = "/data/datasets/", "beir"
+    output_dir = "/data/outputs/benchmarks/02-nomic_embed_text_v1/"
+    # output_dir = "/data/outputs/benchmarks/01-kalm_embedding/" 
+
+    for dset_name in tqdm(["msmarco"]):
         early_concate_metadata(data_dir, output_dir, dset_type, dset_name, meta_order="sorted", 
                                meta_name="hipporag-fact", data_type="test")
 

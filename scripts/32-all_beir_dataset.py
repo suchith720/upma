@@ -7,13 +7,14 @@ if __name__ == "__main__":
 
     data_dir = "/data/datasets/beir/"
     save_dir = "/data/datasets/beir/all-beir/XC/"
+    datasets = ['fever', 'fiqa', 'hotpotqa', 'msmarco', 'nfcorpus', 'nq-train', 'scifact']
 
     all_trn_ids, all_trn_txt = [], []
     all_lbl_ids, all_lbl_txt = [], []
 
     num_labels, num_pairs = 0, 0
     data, indices, indptr = [], [], []
-    for dset in tqdm(['fever', 'fiqa', 'hotpotqa', 'msmarco', 'nfcorpus', 'nq-train', 'scifact'], total=7):
+    for dset in tqdm(datasets, total=len(datasets)):
 
         fname = f"{data_dir}/{dset}/XC/raw_data/train.raw.csv"
         trn_ids, trn_txt = load_raw_file(fname)
