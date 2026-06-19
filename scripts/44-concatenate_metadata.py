@@ -23,8 +23,13 @@ def early_concate_metadata(data_dir:str, output_dir:str, dset_type:str, dset_nam
     meta_ids, meta_txt = load_raw_file(meta_file)
 
     dset_tag = dset_name.replace('/', '-')
+<<<<<<< HEAD
     dm_file = f"{output_dir}/cross_predictions/{meta_name}/test_predictions_{dset_tag}{file_suffix}.npz"
     if not os.path.exists(dm_file):
+=======
+    dm_file = f"{output_dir}/cross_predictions/{meta_name}/test_predictions_{dset_tag}.npz"
+    if not os.path.exists(dm_file): 
+>>>>>>> e2f748b (more scripts)
         print(f"Invalid file: {dm_file}")
         return
     data_meta = retain_topk(sp.load_npz(dm_file), k=5)
@@ -82,6 +87,9 @@ def early_concate_metadata(data_dir:str, output_dir:str, dset_type:str, dset_nam
 if __name__ == "__main__":
     # data_dir, dset_type = "/data/datasets/", "beir"
     # output_dir = "/home/sasokan/suchith/outputs/upma/20_upma-ngame-gpt-intent-substring-linker-with-tied-meta-encoder-for-msmarco-003/"
+
+    data_dir, dset_type = "/data/datasets/", "beir"
+    output_dir = "/data/suchith/outputs/benchmarks/01-kalm_embedding/"
 
     data_dir, dset_type = "/data/datasets/", "beir"
     output_dir = "/data/outputs/benchmarks/02-nomic_embed_text_v1/"
