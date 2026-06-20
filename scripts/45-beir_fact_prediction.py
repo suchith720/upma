@@ -260,6 +260,15 @@ def main():
 
     args = parser.parse_args()
 
+    WIKIPEDIA_DATASETS = {
+        "msmarco",
+        "climate-fever",
+        "dbpedia-entity",
+        "fever",
+        "hotpotqa",
+        "nq",
+    }
+
     # Determine device
     if args.device is None:
         if torch.cuda.is_available():
@@ -322,8 +331,15 @@ def main():
             data_ids, data_txt = load_raw_file(f"{data_dir}/raw_data/test.raw.csv")
             queries = [{"id":i, "text":t} for i,t in zip(data_ids, data_txt)]
 
-            lbl_file = f"{data_dir}/raw_data/hipporag-fact{pred_suffix}.raw.csv"
-            if not os.path.exists(lbl_file): continue
+            if dataset in WIKIPEDIA_DATASETS:
+                lbl_file = f"/data/datasets/beir/hotpotqa/XC/raw_data/hipporag-fact.raw.csv"
+            else:
+                lbl_file = f"{data_dir}/raw_data/hipporag-fact{pred_suffix}.raw.csv"
+
+            if not os.path.exists(lbl_file): 
+                print(f"Invalid label file: {lbl_file}")
+                continue
+
             lbl_ids, lbl_txt = load_raw_file(lbl_file)
             corpus = [{"id":i, "text":t} for i,t in zip(lbl_ids, lbl_txt)]
 
