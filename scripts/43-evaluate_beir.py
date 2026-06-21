@@ -101,10 +101,31 @@ class UnifiedBEIRModel:
         device: str = None,
         use_data_parallel: bool = False,
     ):
-        logger.info(f"Loading SentenceTransformer model: {model_name} on device: {device}")
-        self.model = SentenceTransformer(model_name, trust_remote_code=True, device=device)
-        self.model.max_seq_length = 512
+        st_kwargs = {
+            "trust_remote_code": True,
+            "device": device
+        }
+        model_kwargs = {}
+        tokenizer_kwargs = {}
         self.model_name = model_name.lower()
+        if "qwen" in self.model_name:
+            tokenizer_kwargs["padding_side"] = "left"
+            if "8b" in self.model_name:
+                if device == "cuda" and torch.cuda.is_available() and torch.cuda.is_bf16_supported():
+                    model_kwargs["torch_dtype"] = torch.bfloat16
+                elif device == "cuda" and torch.cuda.is_available():
+                    model_kwargs["torch_dtype"] = torch.float16
+                elif device in ("mps", "cuda"):
+                    model_kwargs["torch_dtype"] = torch.float16
+
+        if model_kwargs:
+            st_kwargs["model_kwargs"] = model_kwargs
+        if tokenizer_kwargs:
+            st_kwargs["tokenizer_kwargs"] = tokenizer_kwargs
+
+        logger.info(f"Loading SentenceTransformer model: {model_name} on device: {device} with kwargs: {st_kwargs}")
+        self.model = SentenceTransformer(model_name, **st_kwargs)
+        self.model.max_seq_length = 512
         self.device = device
         self.use_data_parallel = use_data_parallel
 
@@ -122,6 +143,8 @@ class UnifiedBEIRModel:
                 self.model_type = "nomic"
             elif "kalm" in self.model_name:
                 self.model_type = "kalm"
+            elif "qwen" in self.model_name:
+                self.model_type = "qwen"
             else:
                 self.model_type = "custom"
         else:
@@ -136,6 +159,13 @@ class UnifiedBEIRModel:
         elif self.model_type == "kalm":
             self.query_prefix = (
                 "Instruct: Given a query, retrieve documents that answer the query \n Query: "
+                if query_prefix is None
+                else query_prefix
+            )
+            self.doc_prefix = "" if doc_prefix is None else doc_prefix
+        elif self.model_type == "qwen":
+            self.query_prefix = (
+                "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery: "
                 if query_prefix is None
                 else query_prefix
             )
@@ -199,14 +229,14 @@ def main():
         "--model_name",
         type=str,
         default="nomic-ai/nomic-embed-text-v1",
-        help="HuggingFace model repository name (e.g. 'nomic-ai/nomic-embed-text-v1' or 'HIT-TMG/KaLM-embedding-multilingual-mini-instruct-v2.5').",
+        help="HuggingFace model repository name (e.g. 'nomic-ai/nomic-embed-text-v1', 'Qwen/Qwen3-Embedding-0.6B', or 'Qwen/Qwen3-Embedding-8B').",
     )
     parser.add_argument(
         "--model_type",
         type=str,
         default="auto",
-        choices=["auto", "nomic", "kalm", "custom"],
-        help="Model type to apply default prompts (nomic, kalm, custom). 'auto' resolves based on model name.",
+        choices=["auto", "nomic", "kalm", "qwen", "custom"],
+        help="Model type to apply default prompts (nomic, kalm, qwen, custom). 'auto' resolves based on model name.",
     )
     parser.add_argument(
         "--query_prefix",
