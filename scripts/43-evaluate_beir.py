@@ -165,7 +165,7 @@ class UnifiedBEIRModel:
             self.doc_prefix = "" if doc_prefix is None else doc_prefix
         elif self.model_type == "qwen":
             self.query_prefix = (
-                "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery: "
+                "Instruct: Given a query, retrieve documents that answer the query \n Query: "
                 if query_prefix is None
                 else query_prefix
             )
@@ -335,6 +335,13 @@ def main():
     for dataset in datasets_to_run:
         data_dir = f"/data/datasets/beir/{dataset}/XC/"
 
+        if model.model_type == "qwen":
+            from xcai.maggi.utils import DATASETS, get_instruction
+            instruction = "/home/sasokan/suchith/xcai/xcai/models/nvembed/instructions.json"
+            instruction = get_instruction(instruction, DATASETS[dataset])["query"]
+            model.query_prefix = f"Instruct: {instruction} \n Query: "
+
+
         logger.info(f"\n{'='*20} Evaluating {dataset} {'='*20}")
         try:
             # 1. Load dataset directly from Hugging Face
@@ -401,7 +408,8 @@ def main():
             dataset_batch_size = batch_size_map.get(dataset, default_batch_size)
 
             # 3. Initialize BEIR dense retrieval exact search wrapper
-            model_wrapper = DenseRetrievalExactSearch(model, batch_size=dataset_batch_size)
+            model_wrapper = DenseRetrievalExactSearch(model, batch_size=dataset_batch_size, 
+                                                      corpus_chunk_size=500_000, show_progress_bar=True)
             retriever = EvaluateRetrieval(model_wrapper, score_function="cos_sim")
 
             # 4. Perform retrieval
