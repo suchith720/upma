@@ -406,7 +406,7 @@ def main():
     for dataset in datasets_to_run:
         data_dir = f"/data/datasets/beir/{dataset}/XC/"
 
-        if model.query_model_type == "qwen":
+        if model.query_model_type == "qwen" and args.query_prefix is None:
             try:
                 from xcai.maggi.utils import DATASETS, get_instruction
                 instruction = "/home/sasokan/suchith/xcai/xcai/models/nvembed/instructions.json"
