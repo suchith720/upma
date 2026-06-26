@@ -1,30 +1,20 @@
 {
-    "data_lbl_nvembed-hipporag-facts_ce-negatives-topk-05-linker_exact": {
+    "msmarco_data_nvembed-hipporag-fact_positives-topk-10": {
         "path": {
             "train": {
-                "data_lbl": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/trn_X_Y_ce-exact.npz",
-                "data_info": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/raw_data/train.raw.txt",
-                "lbl_info": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/raw_data/label_exact.raw.txt",
+                "data_lbl": "/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-003/predictions/beir/msmarco/distilbert_linker_training/trn_X_Y_top-10.npz",
+                "data_info": "/data/datasets/beir/msmarco/XC//raw_data/train.raw.csv",
+                "lbl_info": "/data/datasets/beir/msmarco/XC/raw_data/hipporag-fact_xc.raw.csv",
                 "neg_meta": {
                     "prefix": "neg",
-                    "data_meta": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/ce-negatives-topk-05_trn_X_Y.npz",
-                    "meta_info": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/raw_data/ce-scores.raw.txt"
-                },
-                "lnk_meta": {
-                    "prefix": "lnk",
-                    "data_meta": "/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-002/predictions/beir/msmarco/train_facts.npz",
-                    "meta_info": "/data/datasets/beir/msmarco/XC/raw_data/hipporag-fact.raw.csv"
+                    "data_meta": "/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-003/predictions/beir/msmarco/distilbert_linker_training/negatives_trn_X_Y_top-10.npz",
+                    "meta_info": "/data/datasets/beir/msmarco/XC/raw_data/hipporag-fact_xc.raw.csv"
                 }
             },
             "test": {
-                "data_lbl": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/tst_X_Y_exact.npz",
-                "data_info": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/raw_data/test.raw.txt",
-                "lbl_info": "/home/sasokan/b-sprabhu/datasets/beir/msmarco/XC/raw_data/label_exact.raw.txt",
-                "lnk_meta": {
-                    "prefix": "lnk",
-                    "data_meta": "/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-002/predictions/beir/msmarco/test_facts.npz",
-                    "meta_info": "/data/datasets/beir/msmarco/XC/raw_data/hipporag-fact.raw.csv"
-                }
+                "data_lbl": "/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-003/predictions/beir/msmarco/distilbert_linker_training/tst_X_Y.npz",
+                "data_info": "/data/datasets/beir/msmarco/XC//raw_data/test.raw.csv",
+                "lbl_info": "/data/datasets/beir/msmarco/XC//raw_data/label_exact.raw.txt"
             }
         },
         "parameters": {
@@ -73,12 +63,12 @@
             "tokenizer": "distilbert-base-uncased",
             "tokenization_column": "input_text",
             "main_max_data_sequence_length": 32,
-            "main_max_lbl_sequence_length": 300,
-	    "meta_max_sequence_length": {"lnk_meta": 64, "neg_meta": 300},
+            "main_max_lbl_sequence_length": 64,
+            "meta_max_sequence_length": 64,
             "padding": false,
             "return_tensors": null,
             "sep": "->",
-            "data_prompt_func": null,
+	    "data_prompt_func": null,
             "lbl_prompt_func": null,
             "meta_prompt_func": null,
             "pad_side": "right",
@@ -94,14 +84,13 @@
             "data_info_keys": null,
             "lbl_info_keys": null,
             "n_slbl_samples": 1,
-            "n_sneg_samples": 1,
             "main_oversample": false,
             "n_data_meta_samples": null,
             "n_lbl_meta_samples": null,
             "meta_info_keys": null,
-	    "n_sdata_meta_samples": 5,
+            "n_sdata_meta_samples": 1,
             "n_slbl_meta_samples": 1,
-	    "meta_oversample": false
+            "meta_oversample": false
         }
     }
 }

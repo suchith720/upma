@@ -165,7 +165,7 @@ class UnifiedBEIRModel:
             self.doc_prefix = "" if doc_prefix is None else doc_prefix
         elif self.model_type == "qwen":
             self.query_prefix = (
-                "Instruct: Given a query, retrieve documents that answer the query \n Query: "
+                "Instruct: Given a web search query, retrieve relevant passages that answer the query \n Query: "
                 if query_prefix is None
                 else query_prefix
             )
@@ -335,12 +335,11 @@ def main():
     for dataset in datasets_to_run:
         data_dir = f"/data/datasets/beir/{dataset}/XC/"
 
-        if model.model_type == "qwen":
-            from xcai.maggi.utils import DATASETS, get_instruction
-            instruction = "/home/sasokan/suchith/xcai/xcai/models/nvembed/instructions.json"
-            instruction = get_instruction(instruction, DATASETS[dataset])["query"]
-            model.query_prefix = f"Instruct: {instruction} \n Query: "
-
+        # if model.model_type == "qwen":
+        #     from xcai.maggi.utils import DATASETS, get_instruction
+        #     instruction = "/home/sasokan/suchith/xcai/xcai/models/nvembed/instructions.json"
+        #     instruction = get_instruction(instruction, DATASETS[dataset])["query"]
+        #     model.query_prefix = f"Instruct: {instruction} \n Query: "
 
         logger.info(f"\n{'='*20} Evaluating {dataset} {'='*20}")
         try:

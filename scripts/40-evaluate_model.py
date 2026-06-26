@@ -40,13 +40,15 @@ if __name__ == "__main__":
     # data_dir = f"/home/sasokan/suchith/outputs/upma/{expt_name}/cross_predictions/verify"
     # meta_file = f"/home/sasokan/suchith/outputs/upma/{expt_name}/cross_metrics/beir.json"
 
-    data_dir = "/home/sasokan/suchith/outputs/upma/20_upma-ngame-gpt-intent-substring-linker-with-tied-meta-encoder-for-msmarco-003"
-    output_dir = f"{data_dir}/cross_predictions/hipporag-fact/"
+    # data_dir = "/home/sasokan/suchith/outputs/upma/20_upma-ngame-gpt-intent-substring-linker-with-tied-meta-encoder-for-msmarco-003"
+    # output_dir = f"{data_dir}/cross_predictions/hipporag-fact/"
+    # metric_file = f"{data_dir}/cross_metrics/hipporag-fact/beir.json"
 
-    metric_file = f"{data_dir}/cross_metrics/hipporag-fact/beir.json"
+    data_dir = "/data/suchith/outputs/upma/28_distilbert-nvembed-hipporag-fact-linker-for-msmarco-002/"
+    output_dir = f"{data_dir}/cross_predictions/"
+    metric_file = f"{data_dir}/cross_metrics/beir.json"
 
     metrics = dict()
-
     for dataset in tqdm(BEIR_DATASETS):
         dset_tag = dataset.replace("/", "-")
 
@@ -57,7 +59,7 @@ if __name__ == "__main__":
         # lbl_file = f"/data/datasets/beir/{dataset}/XC/tst_X_Y.npz"
         lbl_file = f"/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-003/predictions/beir/{dataset}/test_hipporag-fact.npz"
         if not os.path.exists(lbl_file): continue
-        data_lbl = retain_topk(sp.load_npz(lbl_file), k=20)
+        data_lbl = retain_topk(sp.load_npz(lbl_file), k=5)
         data_lbl.data[:] = 1.0
 
         tst_ids, tst_txt = load_raw_file(f"/data/datasets/beir/{dataset}/XC/raw_data/test.raw.csv")
