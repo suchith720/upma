@@ -130,8 +130,6 @@ if __name__ == '__main__':
         # linker_beir_inference(output_dir, input_args, mname, save_file_name="hipporag-fact", pred_dir_name=pred_dir_name, 
         #                       meta_file=meta_file, use_task_specific_metadata=True, meta_sequence_length=64)
 
-        breakpoint()
-
         meta_file = "/data/datasets/beir/hotpotqa/XC/raw_data/hipporag-fact.raw.csv"
         save_file_name, pred_dir_name = f"{input_args.pickle_dir}/beir/hipporag-fact/hotpotqa.joblib", "cross_predictions"
         input_args.prediction_suffix = "hotpotqa"
