@@ -308,8 +308,6 @@ def main():
     # Encode queries
     rnd_idx = np.random.permutation(len(queries))[:1000]
 
-    breakpoint()
-
     logger.info("Encoding queries with student model...")
     student_embeddings = student_model.encode_queries([queries[i] for i in rnd_idx], batch_size=args.batch_size)
     student_embeddings = student_embeddings[:, :128]
