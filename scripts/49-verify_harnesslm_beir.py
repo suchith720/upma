@@ -13,6 +13,7 @@ from typing import List, Dict, Optional
 import numpy as np
 import pandas as pd
 import torch
+import torch.nn.functional as F
 from sentence_transformers import SentenceTransformer
 from tqdm.auto import tqdm
 
@@ -305,11 +306,25 @@ def main():
     )
 
     # Encode queries
+    rnd_idx = np.random.permutation(len(queries))[:1000]
+
+    breakpoint()
+
     logger.info("Encoding queries with student model...")
-    student_embeddings = student_model.encode_queries(queries, batch_size=args.batch_size)
+    student_embeddings = student_model.encode_queries([queries[i] for i in rnd_idx], batch_size=args.batch_size)
+    student_embeddings = student_embeddings[:, :128]
+    student_embeddings /= np.maximum(
+        np.linalg.norm(student_embeddings, axis=-1, keepdims=True),
+        1e-12
+    )
 
     logger.info("Encoding queries with teacher model...")
-    teacher_embeddings = teacher_model.encode_queries(queries, batch_size=args.batch_size)
+    teacher_embeddings = teacher_model.encode_queries([queries[i] for i in rnd_idx], batch_size=args.batch_size)
+    teacher_embeddings = teacher_embeddings[:, :128]
+    teacher_embeddings /= np.maximum(
+        np.linalg.norm(teacher_embeddings, axis=-1, keepdims=True),
+        1e-12
+    )
 
     student_dim = student_embeddings.shape[1]
     teacher_dim = teacher_embeddings.shape[1]
@@ -327,65 +342,13 @@ def main():
 
     # Compute comparison metrics
     logger.info("Computing metrics...")
-    diff = student_embeddings - teacher_embeddings
 
-    # L2 distance per query (Euclidean distance)
-    l2_distances = np.linalg.norm(diff, axis=1)
-    mean_l2_distance = float(np.mean(l2_distances))
-    std_l2_distance = float(np.std(l2_distances))
-    min_l2_distance = float(np.min(l2_distances))
-    max_l2_distance = float(np.max(l2_distances))
-
-    # MSE (Mean Squared Error)
-    mse = float(np.mean(diff ** 2))
-
-    # Cosine Similarity
-    student_norm = student_embeddings / np.linalg.norm(student_embeddings, axis=1, keepdims=True)
-    teacher_norm = teacher_embeddings / np.linalg.norm(teacher_embeddings, axis=1, keepdims=True)
-    cosine_similarities = np.sum(student_norm * teacher_norm, axis=1)
-    mean_cosine = float(np.mean(cosine_similarities))
-    std_cosine = float(np.std(cosine_similarities))
-    min_cosine = float(np.min(cosine_similarities))
-    max_cosine = float(np.max(cosine_similarities))
+    diff = np.sum((student_embeddings - teacher_embeddings) ** 2, axis=-1)
+    mse = float(diff.mean())
 
     # Print results
-    logger.info(f"\n{'='*20} Embedding Comparison Results {'='*20}")
-    logger.info(f"Total queries: {len(queries)}")
-    logger.info(f"Dimension used for calculation: {student_embeddings.shape[1]}")
-    logger.info(f"Mean Squared Error (MSE): {mse:.8f}")
-    logger.info(f"Mean L2 (Euclidean) Distance: {mean_l2_distance:.6f} (std: {std_l2_distance:.6f})")
-    logger.info(f"Min L2: {min_l2_distance:.6f}, Max L2: {max_l2_distance:.6f}")
-    logger.info(f"Mean Cosine Similarity: {mean_cosine:.6f} (std: {std_cosine:.6f})")
-    logger.info(f"Min Cosine: {min_cosine:.6f}, Max Cosine: {max_cosine:.6f}")
+    logger.info(f"Log Mean Squared Error (MSE): {np.log10(mse):.8f}")
     logger.info(f"{'='*54}\n")
-
-    # Save results to file if specified
-    if args.output_file:
-        results = {
-            "query_file": args.query_file,
-            "student_model_name": args.student_model_name,
-            "teacher_model_name": args.teacher_model_name,
-            "num_queries": len(queries),
-            "dimension": student_embeddings.shape[1],
-            "metrics": {
-                "mse": mse,
-                "mean_l2_distance": mean_l2_distance,
-                "std_l2_distance": std_l2_distance,
-                "min_l2_distance": min_l2_distance,
-                "max_l2_distance": max_l2_distance,
-                "mean_cosine_similarity": mean_cosine,
-                "std_cosine_similarity": std_cosine,
-                "min_cosine_similarity": min_cosine,
-                "max_cosine_similarity": max_cosine,
-            }
-        }
-        output_dir = os.path.dirname(args.output_file)
-        if output_dir:
-            os.makedirs(output_dir, exist_ok=True)
-        with open(args.output_file, "w") as f:
-            json.dump(results, f, indent=4)
-        logger.info(f"Saved results to {args.output_file}")
-
 
 if __name__ == "__main__":
     main()

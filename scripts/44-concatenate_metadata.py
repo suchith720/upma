@@ -90,12 +90,18 @@ if __name__ == "__main__":
     # data_dir, dset_type = "/data/datasets/", "beir"
     # output_dir = "/data/suchith/outputs/benchmarks/01-kalm_embedding/"
 
-    data_dir, dset_type = "/data/datasets/", "beir"
-    output_dir = "/data/outputs/benchmarks/02-nomic_embed_text_v1/"
+    # data_dir, dset_type = "/data/datasets/", "beir"
+    # output_dir = "/data/outputs/benchmarks/02-nomic_embed_text_v1/"
 
-    DATASETS = ["climate-fever", "dbpedia-entity", "fever", "nq"]
-    for dset_name in tqdm(DATASETS):
-        early_concate_metadata(data_dir, output_dir, dset_type, dset_name, meta_order="sorted", meta_name="hipporag-fact", data_type="test", 
-                               file_suffix="hotpotqa")
+    # DATASETS = ["climate-fever", "dbpedia-entity", "fever", "nq"]
+
+    # data_dir, dset_type = "/data/datasets/", "beir"
+    # output_dir = "/data/outputs/upma/28_distilbert-nvembed-hipporag-fact-linker-for-msmarco-002"
+
+    data_dir, dset_type = "/data/datasets/", "beir"
+    output_dir = "/data/outputs/reform/alignment/03-Alignment_Qwen3-Embedding-0.6B_pruned_50_pruned_50_no_prompt_to_0.6B_HF/"
+
+    for dset_name in tqdm(BEIR_DATASETS):
+        early_concate_metadata(data_dir, output_dir, dset_type, dset_name, meta_order="sorted", meta_name="hipporag-fact", data_type="test")
 
 

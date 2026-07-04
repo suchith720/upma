@@ -13,6 +13,7 @@ import numpy as np
 import torch
 import scipy.sparse as sp
 import json
+import torch.nn.functional as F
 
 from sentence_transformers import SentenceTransformer
 from beir import util
@@ -251,7 +252,7 @@ class UnifiedBEIRModel:
     def encode_queries(self, queries: List[str], batch_size: int = 16, **kwargs) -> np.ndarray:
         logger.info(f"Encoding {len(queries)} queries with batch size {batch_size}...")
         prefixed_queries = [f"{self.query_prefix}{q}" for q in queries]
-        return self._encode_texts(self.query_model, self.parallel_query_model, prefixed_queries, batch_size=batch_size)
+        return self._encode_texts(self.query_model, self.parallel_query_model, prefixed_queries, batch_size=batch_size)[:, :128]
 
     def encode_corpus(self, corpus: List[Dict[str, str]], batch_size: int = 16, **kwargs) -> np.ndarray:
         logger.info(f"Encoding {len(corpus)} documents with batch size {batch_size}...")
@@ -271,7 +272,7 @@ class UnifiedBEIRModel:
             logger.info(f"Truncating document embeddings dimension from {doc_dim} to match query dimension {query_dim}")
             doc_embeddings = doc_embeddings[:, :query_dim]
 
-        return doc_embeddings
+        return doc_embeddings[:, :128]
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate text embedding models on BEIR datasets using dual towers.")
