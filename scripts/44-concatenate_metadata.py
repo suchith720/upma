@@ -7,6 +7,36 @@ from sugar.core import load_raw_file, save_raw_file
 from xcai.misc import BEIR_DATASETS
 from xclib.utils.sparse import retain_topk
 
+DATASETS = [
+    # "arguana",
+    "scidocs",
+    "scifact",
+    "webis-touche2020",
+    "trec-covid",
+    "cqadupstack/android",
+    "cqadupstack/english",
+    "cqadupstack/gaming",
+    "cqadupstack/gis",
+    "cqadupstack/mathematica",
+    "cqadupstack/physics",
+    "cqadupstack/programmers",
+    "cqadupstack/stats",
+    "cqadupstack/tex",
+    "cqadupstack/unix",
+    "cqadupstack/webmasters",
+    "cqadupstack/wordpress",
+    "fiqa",
+    "quora",
+    "msmarco",
+    "climate-fever",
+    "dbpedia-entity",
+    "fever",
+    "hotpotqa",
+    "nfcorpus",
+    "nq",
+    "trecdl19",
+    "trecdl20",
+]
 
 def early_concate_metadata(data_dir:str, output_dir:str, dset_type:str, dset_name:str, meta_order:Optional[str]="sorted", 
                            meta_name:Optional[str]="fact", data_type:Optional[str]="test", file_suffix:Optional[str]=None):
