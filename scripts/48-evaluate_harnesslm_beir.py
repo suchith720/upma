@@ -101,6 +101,7 @@ class UnifiedBEIRModel:
         doc_prefix: str = None,
         device: str = None,
         use_data_parallel: bool = False,
+        project: bool = False,
     ):
         logger.info(f"Loading query model: {query_model_name} and doc model: {doc_model_name} on device: {device}")
         
@@ -108,6 +109,7 @@ class UnifiedBEIRModel:
         self.doc_model_name = doc_model_name.lower()
         self.device = device
         self.use_data_parallel = use_data_parallel
+        self.project = project
 
         # Prepare kwargs for query model
         query_st_kwargs = {"trust_remote_code": True, "device": device}
@@ -224,6 +226,48 @@ class UnifiedBEIRModel:
         logger.info(f"Using Query Prefix: {repr(self.query_prefix)}")
         logger.info(f"Using Document Prefix: {repr(self.doc_prefix)}")
 
+        # Caching corpus embeddings attributes
+        self.current_dataset = None
+        self.embeddings_dir = None
+        self.current_doc_cursor = 0
+        self.total_corpus_size = 0
+        self.encoded_slices = []
+        self.entire_corpus_embeddings = None
+        self.cache_path = None
+
+    def set_dataset(self, dataset_name: str, corpus: Dict[str, Dict[str, str]], embeddings_dir: str):
+        self.current_dataset = dataset_name
+        self.embeddings_dir = embeddings_dir
+        self.current_doc_cursor = 0
+        self.total_corpus_size = len(corpus)
+        self.encoded_slices = []
+        
+        # Ensure directory exists
+        os.makedirs(embeddings_dir, exist_ok=True)
+        
+        # Sanitise doc model name for filename
+        sanitized_model_name = self.doc_model_name.replace("/", "_").replace("\\", "_")
+        project_suffix = "_project" if self.project else ""
+        cache_filename = f"{dataset_name.replace('/', '-')}_{sanitized_model_name}{project_suffix}_embeddings.npy"
+        self.cache_path = os.path.join(embeddings_dir, cache_filename)
+        
+        if os.path.exists(self.cache_path):
+            logger.info(f"Loading cached corpus embeddings from {self.cache_path}...")
+            try:
+                self.entire_corpus_embeddings = np.load(self.cache_path)
+                if len(self.entire_corpus_embeddings) != self.total_corpus_size:
+                    logger.warning(
+                        f"Cached embeddings size ({len(self.entire_corpus_embeddings)}) "
+                        f"does not match corpus size ({self.total_corpus_size}). Discarding cache."
+                    )
+                    self.entire_corpus_embeddings = None
+            except Exception as e:
+                logger.error(f"Error loading cached embeddings: {e}. Discarding cache.", exc_info=True)
+                self.entire_corpus_embeddings = None
+        else:
+            logger.info(f"No cached embeddings found at {self.cache_path}. Will encode and save.")
+            self.entire_corpus_embeddings = None
+
     def _encode_texts(self, model: SentenceTransformer, parallel_model, texts: List[str], batch_size: int = 256) -> np.ndarray:
         if self.use_data_parallel and parallel_model is not None:
             logger.info("Encoding using PyTorch DataParallel...")
@@ -252,9 +296,17 @@ class UnifiedBEIRModel:
     def encode_queries(self, queries: List[str], batch_size: int = 16, **kwargs) -> np.ndarray:
         logger.info(f"Encoding {len(queries)} queries with batch size {batch_size}...")
         prefixed_queries = [f"{self.query_prefix}{q}" for q in queries]
-        return self._encode_texts(self.query_model, self.parallel_query_model, prefixed_queries, batch_size=batch_size)[:, :128]
+        query_embeddings = self._encode_texts(self.query_model, self.parallel_query_model, prefixed_queries, batch_size=batch_size)
+        return query_embeddings[:, :128] if self.project else query_embeddings
 
     def encode_corpus(self, corpus: List[Dict[str, str]], batch_size: int = 16, **kwargs) -> np.ndarray:
+        if self.entire_corpus_embeddings is not None:
+            n = len(corpus)
+            logger.info(f"Loading {n} documents from cache (cursor: {self.current_doc_cursor})...")
+            embeddings_slice = self.entire_corpus_embeddings[self.current_doc_cursor : self.current_doc_cursor + n]
+            self.current_doc_cursor += n
+            return embeddings_slice
+
         logger.info(f"Encoding {len(corpus)} documents with batch size {batch_size}...")
         docs = []
         for doc in corpus:
@@ -272,7 +324,19 @@ class UnifiedBEIRModel:
             logger.info(f"Truncating document embeddings dimension from {doc_dim} to match query dimension {query_dim}")
             doc_embeddings = doc_embeddings[:, :query_dim]
 
-        return doc_embeddings[:, :128]
+        final_embeddings = doc_embeddings[:, :128] if self.project else doc_embeddings
+
+        if self.cache_path is not None and self.total_corpus_size > 0:
+            self.encoded_slices.append(final_embeddings)
+            self.current_doc_cursor += len(corpus)
+            if self.current_doc_cursor >= self.total_corpus_size:
+                logger.info(f"All corpus documents encoded. Saving embeddings to {self.cache_path}...")
+                entire_embeddings = np.concatenate(self.encoded_slices, axis=0)
+                np.save(self.cache_path, entire_embeddings)
+                self.entire_corpus_embeddings = entire_embeddings
+                self.encoded_slices = []
+
+        return final_embeddings
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate text embedding models on BEIR datasets using dual towers.")
@@ -349,6 +413,17 @@ def main():
         default="./beir_evaluation/metrics",
         help="Directory to save metrics.",
     )
+    parser.add_argument(
+        "--project",
+        action="store_true",
+        help="Project the final embeddings to 128 dimensions.",
+    )
+    parser.add_argument(
+        "--embeddings_dir",
+        type=str,
+        default="./beir_evaluation/corpus_embeddings",
+        help="Directory to save/load document embeddings.",
+    )
 
     args = parser.parse_args()
 
@@ -389,6 +464,7 @@ def main():
         doc_prefix=args.doc_prefix,
         device=device,
         use_data_parallel=args.use_data_parallel,
+        project=args.project,
     )
 
     # Dictionary to keep track of results
@@ -477,6 +553,9 @@ def main():
                 qrels = qrels_dict
 
             logger.info(f"Loaded {len(queries)} queries and {len(corpus)} corpus documents.")
+
+            # Set current dataset in the model for corpus embeddings caching
+            model.set_dataset(dataset, corpus, args.embeddings_dir)
 
             # Get batch size for this dataset
             dataset_batch_size = batch_size_map.get(dataset, default_batch_size)
