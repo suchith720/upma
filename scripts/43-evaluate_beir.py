@@ -25,6 +25,8 @@ from tqdm.auto import tqdm
 
 from sugar.core import load_raw_file
 
+from xclib.utils.sparse import retain_topk
+
 # Configure logging
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
@@ -234,14 +236,15 @@ class UnifiedBEIRModel:
                 with torch.no_grad():
                     batch_embeddings = self.parallel_model(**batch_features)
                     embeddings.append(batch_embeddings.cpu().numpy())
-            return np.concatenate(embeddings, axis=0)
+            embeddings = np.concatenate(embeddings, axis=0)
         else:
-            return self.model.encode(
+            embeddings = self.model.encode(
                 texts,
                 batch_size=batch_size,
                 show_progress_bar=True,
                 convert_to_numpy=True
             )
+        return embeddings
 
     def encode_queries(self, queries: List[str], batch_size: int = 16, **kwargs) -> np.ndarray:
         logger.info(f"Encoding {len(queries)} queries with batch size {batch_size}...")
@@ -345,6 +348,11 @@ def main():
         default="./beir_evaluation/corpus_embeddings",
         help="Directory to save/load document embeddings.",
     )
+    parser.add_argument(
+        "--metadata",
+        action="store_true",
+        help="To use metadata.",
+    )
 
     args = parser.parse_args()
 
@@ -392,20 +400,22 @@ def main():
     datasets_dir = os.path.join(args.output_dir, "datasets")
     os.makedirs(datasets_dir, exist_ok=True)
 
-    metric_dir = f"{args.metric_dir}/metrics"
+    metric_dir = f"{args.metric_dir}/cross_metrics/test-hipporag-fact" if args.metadata else f"{args.metric_dir}/metrics"
     os.makedirs(metric_dir, exist_ok=True)
 
-    pred_dir = f"{args.metric_dir}/predictions"
+    pred_dir = f"{args.metric_dir}/cross_predictions/test-hipporag-fact" if args.metadata else f"{args.metric_dir}/predictions"
     os.makedirs(pred_dir, exist_ok=True)
+
+    WIKIPEDIA_BASED_DATASETS = set(["climate-fever", "dbpedia-entity", "fever", "nq"])
                 
     for dataset in datasets_to_run:
         data_dir = f"/data/datasets/beir/{dataset}/XC/"
 
-        # if model.model_type == "qwen":
-        #     from xcai.maggi.utils import DATASETS, get_instruction
-        #     instruction = "/home/sasokan/suchith/xcai/xcai/models/nvembed/instructions.json"
-        #     instruction = get_instruction(instruction, DATASETS[dataset])["query"]
-        #     model.query_prefix = f"Instruct: {instruction} \n Query: "
+        if model.model_type == "qwen":
+            from xcai.maggi.utils import DATASETS, get_instruction
+            instruction = "/home/sasokan/suchith/xcai/xcai/models/nvembed/instructions.json"
+            instruction = get_instruction(instruction, DATASETS[dataset])["query"]
+            model.query_prefix = f"Instruct: {instruction} \n Query: "
 
         logger.info(f"\n{'='*20} Evaluating {dataset} {'='*20}")
         try:
@@ -437,6 +447,43 @@ def main():
                     streaming=False,
                     keep_in_memory=True
                 ).load(split="test")
+
+            # Load metadata
+            if args.metadata:
+                if model.model_type != "nomic":
+                    raise ValueError(f"Invalid model type for metadata augmentation: {model.model_type}")
+
+                data_ids, data_txt = load_raw_file(f"{data_dir}/raw_data/test.raw.csv")
+                data_txt2idx = {txt:idx for idx,txt in enumerate(data_txt)}
+
+
+                dset_tag = dataset.replace("/", "-")
+                if dataset in WIKIPEDIA_BASED_DATASETS:
+                    data_meta = sp.load_npz(f"/data/outputs/benchmarks/02-nomic_embed_text_v1/cross_predictions/hipporag-fact/test_predictions_{dset_tag}_hotpotqa.npz")
+                    meta_ids, meta_txt = load_raw_file("/data/datasets/beir/hotpotqa/XC/raw_data/hipporag-fact.raw.csv")
+                else:
+                    data_meta = sp.load_npz(f"/data/outputs/benchmarks/02-nomic_embed_text_v1/cross_predictions/hipporag-fact/test_predictions_{dset_tag}.npz")
+                    meta_ids, meta_txt = load_raw_file(f"{data_dir}/raw_data/hipporag-fact.raw.csv")
+
+                data_meta = retain_topk(data_meta, k=5)
+
+                n_invalid_qry, data_meta_txt = 0, list()
+                for i in range(len(queries)):
+                    qry_txt = queries[i]["text"] 
+                    if qry_txt in data_txt2idx:
+                        idx = data_txt2idx[qry_txt]
+                        qry_txt = qry_txt + " || <FACTS> " + " || ".join([meta_txt[m] for m in data_meta[idx].indices]) 
+                    else:
+                        n_invalid_qry += 1
+                    data_meta_txt.append(qry_txt)
+
+                if isinstance(queries, list):
+                    for o,q in zip(queries, data_meta_txt): o["text"] = q
+                else:
+                    queries = queries.remove_columns("text")
+                    queries = queries.add_column("text", data_meta_txt)
+
+                print(f"Number of invalid queries: {n_invalid_qry}")
 
             # Convert queries to BEIR dictionary format if it is a Hugging Face Dataset
             if not isinstance(queries, dict):

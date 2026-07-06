@@ -30,7 +30,10 @@ python scripts/49-verify_harnesslm_beir.py --query_file /home/sasokan/suchith/da
 
 python scripts/50-harnesslm_fact_prediction.py --datasets all --query_model_name /data/outputs/reform/alignment/03-Alignment_Qwen3-Embedding-0.6B_pruned_50_pruned_50_no_prompt_to_0.6B_HF/ --query_model_type qwen --doc_model_name Qwen/Qwen3-Embedding-0.6B --doc_model_type qwen --batch_size 256 --use_data_parallel --metric_dir /data/outputs/reform/alignment/03-Alignment_Qwen3-Embedding-0.6B_pruned_50_pruned_50_no_prompt_to_0.6B_HF/ --query_prefix ""
 
+<<<<<<< HEAD
 python scripts/48-evaluate_harnesslm_beir.py --datasets arguana --query_model_name /data/scratch/suchith/alignment/02-Alignment_1024/01-Alignment_Qwen3-Embedding-0.6B_pruned_50_no_prompt_to_0.6B_HF/ --query_model_type qwen --doc_model_name Qwen/Qwen3-Embedding-0.6B --doc_model_type qwen --batch_size 256 --use_data_parallel --metric_dir /data/scratch/suchith/alignment/02-Alignment_1024/01-Alignment_Qwen3-Embedding-0.6B_pruned_50_no_prompt_to_0.6B_HF/ --query_prefix ""
 
 python scripts/48-evaluate_harnesslm_beir.py --datasets all --query_model_name /data/scratch/suchith/alignment/02-Alignment_1024/01-Alignment_Qwen3-Embedding-0.6B_pruned_50_no_prompt_to_0.6B_HF/ --query_model_type qwen --doc_model_name Qwen/Qwen3-Embedding-0.6B --doc_model_type qwen --batch_size 256 --use_data_parallel --metric_dir /data/scratch/suchith/alignment/02-Alignment_1024/01-Alignment_Qwen3-Embedding-0.6B_pruned_50_no_prompt_to_0.6B_HF/ --query_prefix "" --embeddings_dir /data/outputs//benchmarks/04-qwen_embedding_0.6B/corpus_embeddings/
 
+=======
+>>>>>>> 9b2c7fe (more experiments)
