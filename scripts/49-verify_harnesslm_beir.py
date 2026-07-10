@@ -268,6 +268,11 @@ def main():
         default=None,
         help="Path to save the comparison results as JSON (optional).",
     )
+    parser.add_argument(
+        "--project",
+        action="store_true",
+        help="Project the embeddings to 128 dimensions.",
+    )
 
     args = parser.parse_args()
 
@@ -306,23 +311,25 @@ def main():
     )
 
     # Encode queries
-    rnd_idx = np.random.permutation(len(queries))[:1000]
+    rnd_idx = np.random.permutation(len(queries))[:10_000]
 
     logger.info("Encoding queries with student model...")
     student_embeddings = student_model.encode_queries([queries[i] for i in rnd_idx], batch_size=args.batch_size)
-    # student_embeddings = student_embeddings[:, :128]
-    # student_embeddings /= np.maximum(
-    #     np.linalg.norm(student_embeddings, axis=-1, keepdims=True),
-    #     1e-12
-    # )
+    if args.project:
+        student_embeddings = student_embeddings[:, :128]
+        student_embeddings /= np.maximum(
+            np.linalg.norm(student_embeddings, axis=-1, keepdims=True),
+            1e-12
+        )
 
     logger.info("Encoding queries with teacher model...")
     teacher_embeddings = teacher_model.encode_queries([queries[i] for i in rnd_idx], batch_size=args.batch_size)
-    # teacher_embeddings = teacher_embeddings[:, :128]
-    # teacher_embeddings /= np.maximum(
-    #     np.linalg.norm(teacher_embeddings, axis=-1, keepdims=True),
-    #     1e-12
-    # )
+    if args.project:
+        teacher_embeddings = teacher_embeddings[:, :128]
+        teacher_embeddings /= np.maximum(
+            np.linalg.norm(teacher_embeddings, axis=-1, keepdims=True),
+            1e-12
+        )
 
     student_dim = student_embeddings.shape[1]
     teacher_dim = teacher_embeddings.shape[1]

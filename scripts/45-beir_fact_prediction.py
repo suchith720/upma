@@ -257,16 +257,27 @@ def main():
         default=None,
         help="Suffix of the prediction file.",
     )
+    parser.add_argument(
+        "--nomic_data",
+        action="store_true",
+        help="Compute predictions on nomic training data.",
+    )
 
     args = parser.parse_args()
 
     WIKIPEDIA_DATASETS = {
-        "msmarco",
         "climate-fever",
         "dbpedia-entity",
         "fever",
         "hotpotqa",
         "nq",
+    }
+
+    NOMIC_DATASETS = {
+        "fever": "fever_hn_mine",
+        "msmarco": "msmarco_distillation_simlm_rescored_reranked_min15",
+        "hotpotqa": "hotpotqa_hn_mine_shuffled",
+        "nq": "nq_cocondensor_hn_mine_reranked_min15",
     }
 
     # Determine device
@@ -292,7 +303,9 @@ def main():
 
     # Determine datasets to evaluate
     datasets_to_run = args.datasets
-    if len(datasets_to_run) == 1 and datasets_to_run[0].lower() == "all":
+    if args.nomic_data:
+        datasets_to_run = list(NOMIC_DATASETS)
+    elif len(datasets_to_run) == 1 and datasets_to_run[0].lower() == "all":
         datasets_to_run = DATASETS
     logger.info(f"Datasets selected for evaluation: {datasets_to_run}")
 
@@ -320,7 +333,8 @@ def main():
     os.makedirs(pred_dir, exist_ok=True)
 
     pred_suffix = "" if args.pred_suffix is None else f"_{args.pred_suffix}"
-                
+    save_suffix = pred_suffix
+
     for dataset in datasets_to_run:
         data_dir = f"/data/datasets/beir/{dataset}/XC/"
         data_lbl_dir = f"/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-003/predictions/beir/{dataset}/"
@@ -328,11 +342,22 @@ def main():
         logger.info(f"\n{'='*20} Evaluating {dataset} {'='*20}")
         try:
             # 1. Load dataset
-            data_ids, data_txt = load_raw_file(f"{data_dir}/raw_data/test.raw.csv")
+            if args.nomic_data:
+                nomic_data_dir = f"/data/datasets/nomic/{NOMIC_DATASETS[dataset]}/"
+                data_file = f"{nomic_data_dir}/raw_data/train.raw.csv"
+
+                save_suffix = f"{save_suffix}_nomic"
+            else:
+                data_file = "{data_dir}/raw_data/test.raw.csv"
+
+            if not os.path.exists(data_file): continue
+            data_ids, data_txt = load_raw_file(data_file)
+
             queries = [{"id":i, "text":t} for i,t in zip(data_ids, data_txt)]
 
             if dataset in WIKIPEDIA_DATASETS:
                 lbl_file = f"/data/datasets/beir/hotpotqa/XC/raw_data/hipporag-fact.raw.csv"
+                save_suffix = f"{save_suffix}_hotpotqa"
             else:
                 lbl_file = f"{data_dir}/raw_data/hipporag-fact{pred_suffix}.raw.csv"
 
@@ -343,7 +368,7 @@ def main():
             lbl_ids, lbl_txt = load_raw_file(lbl_file)
             corpus = [{"id":i, "text":t} for i,t in zip(lbl_ids, lbl_txt)]
 
-            data_lbl_file = f"{data_lbl_dir}/test_hipporag-fact{pred_suffix}.npz"
+            data_lbl_file = f"{data_lbl_dir}/test_hipporag-fact{save_suffix}.npz"
             data_lbl = None
             if os.path.exists(data_lbl_file):
                 data_lbl = retain_topk(sp.load_npz(data_lbl_file), k=5)
@@ -409,7 +434,7 @@ def main():
                     indices.append(lbl_ids2idx[l])
                 indptr.append(len(data))
             pred_lbl = sp.csr_matrix((data, indices, indptr), dtype=np.float32, shape=(len(data_ids), len(lbl_ids)))
-            sp.save_npz(f"{pred_dir}/test_predictions_{dataset_prefix}{pred_suffix}.npz", pred_lbl)
+            sp.save_npz(f"{pred_dir}/test_predictions_{dataset_prefix}{save_suffix}.npz", pred_lbl)
 
             # 5. Evaluate and compute metrics
             logger.info("Computing metrics...")
@@ -423,7 +448,7 @@ def main():
                 for name, vals in [("NDCG", ndcg), ("Recall", recall), ("Precision", precision), ("MAP", _map), ("MRR", mrr)]:
                     for k, v in vals.items(): metrics.update({f"{name}@{k.split('@')[1]}": v})
 
-                with open(f"{metric_dir}/{dataset_prefix}{pred_suffix}.json", "w") as file:
+                with open(f"{metric_dir}/{dataset_prefix}{save_suffix}.json", "w") as file:
                     json.dump({dataset: metrics}, file, indent=4)
                 ndcg_scores[dataset_prefix] = metrics["NDCG@10"]
 
