@@ -37,11 +37,11 @@ logger = logging.getLogger(__name__)
 
 # Standard BEIR datasets
 BEIR_DATASETS = [
-    "arguana",
-    "scidocs",
-    "scifact",
-    "webis-touche2020",
-    "trec-covid",
+    # "arguana",
+    # "scidocs",
+    # "scifact",
+    # "webis-touche2020",
+    # "trec-covid",
     "cqadupstack/android",
     "cqadupstack/english",
     "cqadupstack/gaming",
@@ -54,15 +54,15 @@ BEIR_DATASETS = [
     "cqadupstack/unix",
     "cqadupstack/webmasters",
     "cqadupstack/wordpress",
-    "fiqa",
-    "quora",
-    "msmarco",
-    "climate-fever",
-    "dbpedia-entity",
-    "fever",
-    "hotpotqa",
-    "nfcorpus",
-    "nq",
+    # "fiqa",
+    # "quora",
+    # "msmarco",
+    # "climate-fever",
+    # "dbpedia-entity",
+    # "fever",
+    # "hotpotqa",
+    # "nfcorpus",
+    # "nq",
 ]
 
 def collate_beir_metrics(metric_dir:str):
@@ -199,7 +199,7 @@ class UnifiedBEIRModel:
         os.makedirs(embeddings_dir, exist_ok=True)
         
         # Sanitise model name for filename
-        sanitized_model_name = self.model_name.replace("/", "_").replace("\\", "_")
+        sanitized_model_name = self.model_name.strip("/").replace("/", "_").replace("\\", "_")
         cache_filename = f"{dataset_name.replace('/', '-')}_{sanitized_model_name}_embeddings.npy"
         self.cache_path = os.path.join(embeddings_dir, cache_filename)
         
@@ -265,7 +265,10 @@ class UnifiedBEIRModel:
             title = doc.get("title", "").strip()
             text = doc.get("text", "").strip()
             doc_text = f"{title} {text}".strip()
-            docs.append(f"{self.doc_prefix}{doc_text}")
+            if self.current_dataset == "quora":
+                docs.append(f"{self.query_prefix}{doc_text}")
+            else:
+                docs.append(f"{self.doc_prefix}{doc_text}")
         doc_embeddings = self._encode_texts(docs, batch_size=batch_size)
 
         if self.cache_path is not None and self.total_corpus_size > 0:
@@ -392,6 +395,7 @@ def main():
         device=device,
         use_data_parallel=args.use_data_parallel,
     )
+    model_doc_prefix = model.doc_prefix
 
     # Dictionary to keep track of results
     ndcg_scores = {}
