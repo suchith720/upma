@@ -63,6 +63,13 @@ BEIR_DATASETS = [
     "nq",
 ]
 
+BDATASETS = [
+    "fever",
+    "hotpotqa",
+    "nfcorpus",
+    "nq",
+]
+
 def collate_beir_metrics(metric_dir:str):
     beir_metrics = {}
     for dataset in BEIR_DATASETS:
@@ -451,7 +458,7 @@ def main():
     # Determine datasets to evaluate
     datasets_to_run = args.datasets
     if len(datasets_to_run) == 1 and datasets_to_run[0].lower() == "all":
-        datasets_to_run = BEIR_DATASETS
+        datasets_to_run = BDATASETS # BEIR_DATASETS
     logger.info(f"Datasets selected for evaluation: {datasets_to_run}")
 
     # Initialize model
