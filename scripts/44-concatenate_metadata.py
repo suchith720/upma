@@ -8,48 +8,33 @@ from xcai.misc import BEIR_DATASETS
 from xclib.utils.sparse import retain_topk
 
 DATASETS = [
-    # "arguana",
-    "scidocs",
-    "scifact",
-    "webis-touche2020",
-    "trec-covid",
-    "cqadupstack/android",
-    "cqadupstack/english",
-    "cqadupstack/gaming",
-    "cqadupstack/gis",
-    "cqadupstack/mathematica",
-    "cqadupstack/physics",
-    "cqadupstack/programmers",
-    "cqadupstack/stats",
-    "cqadupstack/tex",
-    "cqadupstack/unix",
-    "cqadupstack/webmasters",
-    "cqadupstack/wordpress",
-    "fiqa",
-    "quora",
-    "msmarco",
-    "climate-fever",
-    "dbpedia-entity",
+    # "msmarco",
     "fever",
     "hotpotqa",
-    "nfcorpus",
     "nq",
-    "trecdl19",
-    "trecdl20",
 ]
+
+NOMIC_DATASETS = {
+    "fever": "fever_hn_mine",
+    "msmarco": "msmarco_distillation_simlm_rescored_reranked_min15",
+    "hotpotqa": "hotpotqa_hn_mine_shuffled",
+    "nq": "nq_cocondensor_hn_mine_reranked_min15",
+}
 
 def early_concate_metadata(data_dir:str, output_dir:str, dset_type:str, dset_name:str, meta_order:Optional[str]="sorted", 
                            meta_name:Optional[str]="fact", data_type:Optional[str]="test", file_suffix:Optional[str]=None):
-
     file_suffix = "" if file_suffix is None else f"_{file_suffix}"
 
-    data_file = f"{data_dir}/{dset_type}/{dset_name}/XC/raw_data/{data_type}.raw.csv"
+    if dset_type == "nomic":
+        data_file = f"{data_dir}/{dset_type}/{NOMIC_DATASETS[dset_name]}/raw_data/{data_type}.raw.csv"
+    else:
+        data_file = f"{data_dir}/{dset_type}/{dset_name}/XC/raw_data/{data_type}.raw.csv"
     data_ids, data_txt = load_raw_file(data_file)
 
     meta_file = (
-        f"{data_dir}/{dset_type}/hotpotqa/XC/raw_data/{meta_name}.raw.csv"
-        if file_suffix == "_hotpotqa" else 
-        f"{data_dir}/{dset_type}/{dset_name}/XC/raw_data/{meta_name}{file_suffix}.raw.csv"
+        f"{data_dir}/beir/hotpotqa/XC/raw_data/{meta_name}.raw.csv"
+        if "_hotpotqa" in file_suffix else 
+        f"{data_dir}/beir/{dset_name}/XC/raw_data/{meta_name}{file_suffix}.raw.csv"
     )
     if not os.path.exists(meta_file): 
         print(f"Invalid file: {meta_file}")
@@ -57,7 +42,7 @@ def early_concate_metadata(data_dir:str, output_dir:str, dset_type:str, dset_nam
     meta_ids, meta_txt = load_raw_file(meta_file)
 
     dset_tag = dset_name.replace('/', '-')
-    dm_file = f"{output_dir}/cross_predictions/{meta_name}/test_predictions_{dset_tag}{file_suffix}.npz"
+    dm_file = f"{output_dir}/cross_predictions/{meta_name}/{data_type}_predictions_{dset_tag}{file_suffix}.npz"
     if not os.path.exists(dm_file):
         print(f"Invalid file: {dm_file}")
         return
@@ -128,10 +113,14 @@ if __name__ == "__main__":
     # data_dir, dset_type = "/data/datasets/", "beir"
     # output_dir = "/data/outputs/upma/28_distilbert-nvembed-hipporag-fact-linker-for-msmarco-002"
 
-    data_dir, dset_type = "/data/datasets/", "beir"
-    output_dir = "/data/outputs/reform/alignment/03-Alignment_Qwen3-Embedding-0.6B_pruned_50_pruned_50_no_prompt_to_0.6B_HF/"
+    # data_dir, dset_type = "/data/datasets/", "beir"
+    # output_dir = "/data/outputs/reform/alignment/03-Alignment_Qwen3-Embedding-0.6B_pruned_50_pruned_50_no_prompt_to_0.6B_HF/"
 
-    for dset_name in tqdm(BEIR_DATASETS):
-        early_concate_metadata(data_dir, output_dir, dset_type, dset_name, meta_order="sorted", meta_name="hipporag-fact", data_type="test")
+    data_dir, dset_type = "/data/datasets/", "nomic"
+    output_dir = "/data/suchith/outputs/benchmarks/02-nomic_embed_text_v1/"
+
+    for dset_name in tqdm(DATASETS):
+        early_concate_metadata(data_dir, output_dir, dset_type, dset_name, meta_order="sorted", meta_name="hipporag-fact", 
+                               data_type="train", file_suffix="nomic_hotpotqa")
 
 

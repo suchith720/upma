@@ -20,7 +20,7 @@ from beir import util
 from beir.datasets.data_loader import GenericDataLoader
 from beir.datasets.data_loader_hf import HFDataLoader
 from beir.retrieval.evaluation import EvaluateRetrieval
-from beir.retrieval.search.dense import DenseRetrievalExactSearch, DenseRetrievalFaissSearch, FlatIPFaissSearch
+from beir.retrieval.search.dense import DenseRetrievalExactSearch
 from tqdm.auto import tqdm
 
 from xcai.misc import BEIR_DATASETS
@@ -262,11 +262,6 @@ def main():
         action="store_true",
         help="Compute predictions on nomic training data.",
     )
-    parser.add_argument(
-        "--faiss_index",
-        action="store_true",
-        help="Use FAISS to index documents.",
-    )
 
     args = parser.parse_args()
 
@@ -280,9 +275,9 @@ def main():
 
     NOMIC_DATASETS = {
         # "fever": "fever_hn_mine",
-        "msmarco": "msmarco_distillation_simlm_rescored_reranked_min15",
         "hotpotqa": "hotpotqa_hn_mine_shuffled",
         "nq": "nq_cocondensor_hn_mine_reranked_min15",
+        "msmarco": "msmarco_distillation_simlm_rescored_reranked_min15",
     }
 
     # Determine device
@@ -421,17 +416,8 @@ def main():
             dataset_batch_size = batch_size_map.get(dataset, default_batch_size)
 
             # 3. Initialize BEIR dense retrieval exact search wrapper
-            if args.faiss_index:
-                model_wrapper = FlatIPFaissSearch(
-                    model,
-                    batch_size=dataset_batch_size,
-                    corpus_chunk_size=100_000,
-                    score_function="cos_sim",
-                    use_gpu=True,
-                )
-            else:
-                model_wrapper = DenseRetrievalExactSearch(model, batch_size=dataset_batch_size, 
-                                                          show_progress_bar=True, corpus_chunk_size=100_000)
+            model_wrapper = DenseRetrievalExactSearch(model, batch_size=dataset_batch_size, 
+                                                      show_progress_bar=True, corpus_chunk_size=100_000)
 
             retriever = EvaluateRetrieval(model_wrapper, score_function="cos_sim")
 
