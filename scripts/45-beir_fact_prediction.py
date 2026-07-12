@@ -20,7 +20,7 @@ from beir import util
 from beir.datasets.data_loader import GenericDataLoader
 from beir.datasets.data_loader_hf import HFDataLoader
 from beir.retrieval.evaluation import EvaluateRetrieval
-from beir.retrieval.search.dense import DenseRetrievalExactSearch
+from beir.retrieval.search.dense import DenseRetrievalExactSearch, HNSWFaissSearch
 from tqdm.auto import tqdm
 
 from xcai.misc import BEIR_DATASETS
@@ -34,6 +34,21 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
+
+class HNSWSQFaissSearchCompact(HNSWFaissSearch):
+    """Newer BEIR marks encode/search_from_files abstract but never uses them
+    in the retrieve()->search() path. Stub them so the class is instantiable.
+
+    NOTE: uses HNSWFaissSearch (not HNSWSQFaissSearch): the SQ variant in this
+    BEIR build creates IndexHNSWSQ(dim+1) but trains via FaissTrainIndex on raw
+    dim-D embeddings (no aux-dim augmentation) -> `assert d == self.d` crash.
+    HNSWFaissSearch augments both corpus and queries correctly."""
+
+    def encode(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def search_from_files(self, *args, **kwargs):
+        raise NotImplementedError
 
 # Standard BEIR datasets
 DATASETS = [
@@ -149,6 +164,47 @@ class UnifiedBEIRModel:
         logger.info(f"Using Query Prefix: {repr(self.query_prefix)}")
         logger.info(f"Using Document Prefix: {repr(self.doc_prefix)}")
 
+        # Caching corpus embeddings attributes
+        self.current_dataset = None
+        self.embeddings_dir = None
+        self.current_doc_cursor = 0
+        self.total_corpus_size = 0
+        self.encoded_slices = []
+        self.entire_corpus_embeddings = None
+        self.cache_path = None
+
+    def set_dataset(self, dataset_name: str, corpus: Dict[str, Dict[str, str]], embeddings_dir: str):
+        self.current_dataset = dataset_name
+        self.embeddings_dir = embeddings_dir
+        self.current_doc_cursor = 0
+        self.total_corpus_size = len(corpus)
+        self.encoded_slices = []
+
+        # Ensure directory exists
+        os.makedirs(embeddings_dir, exist_ok=True)
+
+        # Sanitise model name for filename
+        sanitized_model_name = self.model_name.strip("/").replace("/", "_").replace("\\", "_")
+        cache_filename = f"{dataset_name.replace('/', '-')}_{sanitized_model_name}_embeddings.npy"
+        self.cache_path = os.path.join(embeddings_dir, cache_filename)
+
+        if os.path.exists(self.cache_path):
+            logger.info(f"Loading cached corpus embeddings from {self.cache_path}...")
+            try:
+                self.entire_corpus_embeddings = np.load(self.cache_path)
+                if len(self.entire_corpus_embeddings) != self.total_corpus_size:
+                    logger.warning(
+                        f"Cached embeddings size ({len(self.entire_corpus_embeddings)}) "
+                        f"does not match corpus size ({self.total_corpus_size}). Discarding cache."
+                    )
+                    self.entire_corpus_embeddings = None
+            except Exception as e:
+                logger.error(f"Error loading cached embeddings: {e}. Discarding cache.", exc_info=True)
+                self.entire_corpus_embeddings = None
+        else:
+            logger.info(f"No cached embeddings found at {self.cache_path}. Will encode and save.")
+            self.entire_corpus_embeddings = None
+
     def _encode_texts(self, texts: List[str], batch_size: int = 256) -> np.ndarray:
         if self.use_data_parallel:
             logger.info("Encoding using PyTorch DataParallel...")
@@ -180,6 +236,13 @@ class UnifiedBEIRModel:
         return self._encode_texts(prefixed_queries, batch_size=batch_size)
 
     def encode_corpus(self, corpus: List[Dict[str, str]], batch_size: int = 16, **kwargs) -> np.ndarray:
+        if self.entire_corpus_embeddings is not None:
+            n = len(corpus)
+            logger.info(f"Loading {n} documents from cache (cursor: {self.current_doc_cursor})...")
+            embeddings_slice = self.entire_corpus_embeddings[self.current_doc_cursor : self.current_doc_cursor + n]
+            self.current_doc_cursor += n
+            return embeddings_slice
+
         logger.info(f"Encoding {len(corpus)} documents with batch size {batch_size}...")
         docs = []
         for doc in corpus:
@@ -187,7 +250,19 @@ class UnifiedBEIRModel:
             text = doc.get("text", "").strip()
             doc_text = f"{title} {text}".strip()
             docs.append(f"{self.doc_prefix}{doc_text}")
-        return self._encode_texts(docs, batch_size=batch_size)
+        doc_embeddings = self._encode_texts(docs, batch_size=batch_size)
+
+        if self.cache_path is not None and self.total_corpus_size > 0:
+            self.encoded_slices.append(doc_embeddings)
+            self.current_doc_cursor += len(corpus)
+            if self.current_doc_cursor >= self.total_corpus_size:
+                logger.info(f"All corpus documents encoded. Saving embeddings to {self.cache_path}...")
+                entire_embeddings = np.concatenate(self.encoded_slices, axis=0)
+                np.save(self.cache_path, entire_embeddings)
+                self.entire_corpus_embeddings = entire_embeddings
+                self.encoded_slices = []
+
+        return doc_embeddings
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate text embedding models on BEIR datasets.")
@@ -261,6 +336,17 @@ def main():
         "--nomic_data",
         action="store_true",
         help="Compute predictions on nomic training data.",
+    )
+    parser.add_argument(
+        "--use_anns",
+        action="store_true",
+        help="Use ANNS for approximate search.",
+    )
+    parser.add_argument(
+        "--embeddings_dir",
+        type=str,
+        default="./beir_evaluation/corpus_embeddings",
+        help="Directory to save/load cached document (corpus) embeddings.",
     )
 
     args = parser.parse_args()
@@ -412,12 +498,26 @@ def main():
 
             logger.info(f"Loaded {len(queries)} queries and {len(corpus)} corpus documents.")
 
+            # Set current dataset in the model for corpus embeddings caching.
+            # Key the cache on the corpus source: Wikipedia datasets share hotpotqa's
+            # fact file, everything else uses its own hipporag-fact{pred_suffix} file.
+            if dataset in WIKIPEDIA_DATASETS:
+                corpus_cache_tag = "hotpotqa-hipporag-fact"
+            else:
+                corpus_cache_tag = f"{dataset.replace('/', '-')}-hipporag-fact{pred_suffix}"
+            model.set_dataset(corpus_cache_tag, corpus, args.embeddings_dir)
+
             # Get batch size for this dataset
             dataset_batch_size = batch_size_map.get(dataset, default_batch_size)
 
             # 3. Initialize BEIR dense retrieval exact search wrapper
-            model_wrapper = DenseRetrievalExactSearch(model, batch_size=dataset_batch_size, 
-                                                      show_progress_bar=True, corpus_chunk_size=100_000)
+            if args.use_anns:
+                model_wrapper = HNSWSQFaissSearchCompact(model, batch_size=dataset_batch_size, 
+                                                         show_progress_bar=True, corpus_chunk_size=100_000, 
+                                                         use_gpu=False)
+            else:
+                model_wrapper = DenseRetrievalExactSearch(model, batch_size=dataset_batch_size, 
+                                                          show_progress_bar=True, corpus_chunk_size=100_000)
 
             retriever = EvaluateRetrieval(model_wrapper, score_function="cos_sim")
 

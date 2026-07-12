@@ -20,7 +20,7 @@ from beir import util
 from beir.datasets.data_loader import GenericDataLoader
 from beir.datasets.data_loader_hf import HFDataLoader
 from beir.retrieval.evaluation import EvaluateRetrieval
-from beir.retrieval.search.dense import DenseRetrievalExactSearch
+from beir.retrieval.search.dense import DenseRetrievalExactSearch, HNSWFaissSearch
 from tqdm.auto import tqdm
 
 from sugar.core import load_raw_file
@@ -35,13 +35,28 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+class HNSWSQFaissSearchCompact(HNSWFaissSearch):
+    """Newer BEIR marks encode/search_from_files abstract but never uses them
+    in the retrieve()->search() path. Stub them so the class is instantiable.
+
+    NOTE: uses HNSWFaissSearch (not HNSWSQFaissSearch): the SQ variant in this
+    BEIR build creates IndexHNSWSQ(dim+1) but trains via FaissTrainIndex on raw
+    dim-D embeddings (no aux-dim augmentation) -> `assert d == self.d` crash.
+    HNSWFaissSearch augments both corpus and queries correctly."""
+
+    def encode(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def search_from_files(self, *args, **kwargs):
+        raise NotImplementedError
+
 # Standard BEIR datasets
 BEIR_DATASETS = [
-    # "arguana",
-    # "scidocs",
-    # "scifact",
-    # "webis-touche2020",
-    # "trec-covid",
+    "arguana",
+    "scidocs",
+    "scifact",
+    "webis-touche2020",
+    "trec-covid",
     "cqadupstack/android",
     "cqadupstack/english",
     "cqadupstack/gaming",
@@ -54,15 +69,15 @@ BEIR_DATASETS = [
     "cqadupstack/unix",
     "cqadupstack/webmasters",
     "cqadupstack/wordpress",
-    # "fiqa",
-    # "quora",
-    # "msmarco",
-    # "climate-fever",
-    # "dbpedia-entity",
-    # "fever",
-    # "hotpotqa",
-    # "nfcorpus",
-    # "nq",
+    "fiqa",
+    "quora",
+    "msmarco",
+    "climate-fever",
+    "dbpedia-entity",
+    "fever",
+    "hotpotqa",
+    "nfcorpus",
+    "nq",
 ]
 
 def collate_beir_metrics(metric_dir:str):
@@ -356,6 +371,11 @@ def main():
         action="store_true",
         help="To use metadata.",
     )
+    parser.add_argument(
+        "--use_anns",
+        action="store_true",
+        help="Use ANNS for approximate search.",
+    )
 
     args = parser.parse_args()
 
@@ -527,8 +547,14 @@ def main():
             dataset_batch_size = batch_size_map.get(dataset, default_batch_size)
 
             # 3. Initialize BEIR dense retrieval exact search wrapper
-            model_wrapper = DenseRetrievalExactSearch(model, batch_size=dataset_batch_size, 
-                                                      corpus_chunk_size=500_000, show_progress_bar=True)
+            if args.use_anns:
+                model_wrapper = HNSWSQFaissSearchCompact(model, batch_size=dataset_batch_size,
+                                                         show_progress_bar=True, corpus_chunk_size=100_000,
+                                                         use_gpu=False)
+            else:
+                model_wrapper = DenseRetrievalExactSearch(model, batch_size=dataset_batch_size, 
+                                                          show_progress_bar=True, corpus_chunk_size=100_000)
+
             retriever = EvaluateRetrieval(model_wrapper, score_function="cos_sim")
 
             # 4. Perform retrieval
