@@ -361,7 +361,7 @@ def main():
 
     NOMIC_DATASETS = {
         # "fever": "fever_hn_mine",
-        "hotpotqa": "hotpotqa_hn_mine_shuffled",
+        # "hotpotqa": "hotpotqa_hn_mine_shuffled",
         "nq": "nq_cocondensor_hn_mine_reranked_min15",
         "msmarco": "msmarco_distillation_simlm_rescored_reranked_min15",
     }
