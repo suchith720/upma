@@ -51,12 +51,14 @@ class HNSWSQFaissSearchCompact(HNSWFaissSearch):
         raise NotImplementedError
 
 # Standard BEIR datasets
+PADDING_TYPE = "left"
+
 BEIR_DATASETS = [
-    "arguana",
-    "scidocs",
-    "scifact",
-    "webis-touche2020",
-    "trec-covid",
+    # "arguana",
+    # "scidocs",
+    # "scifact",
+    # "webis-touche2020",
+    # "trec-covid",
     "cqadupstack/android",
     "cqadupstack/english",
     "cqadupstack/gaming",
@@ -69,15 +71,15 @@ BEIR_DATASETS = [
     "cqadupstack/unix",
     "cqadupstack/webmasters",
     "cqadupstack/wordpress",
-    "fiqa",
-    "quora",
-    "msmarco",
-    "climate-fever",
-    "dbpedia-entity",
-    "fever",
-    "hotpotqa",
-    "nfcorpus",
-    "nq",
+    # "fiqa",
+    # "quora",
+    # "msmarco",
+    # "climate-fever",
+    # "dbpedia-entity",
+    # "fever",
+    # "hotpotqa",
+    # "nfcorpus",
+    # "nq",
 ]
 
 def collate_beir_metrics(metric_dir:str):
@@ -126,7 +128,7 @@ class UnifiedBEIRModel:
         tokenizer_kwargs = {}
         self.model_name = model_name.lower()
         if "qwen" in self.model_name:
-            tokenizer_kwargs["padding_side"] = "left"
+            tokenizer_kwargs["padding_side"] = PADDING_TYPE 
             if "8b" in self.model_name:
                 if device == "cuda" and torch.cuda.is_available() and torch.cuda.is_bf16_supported():
                     model_kwargs["torch_dtype"] = torch.bfloat16
@@ -210,29 +212,33 @@ class UnifiedBEIRModel:
         self.total_corpus_size = len(corpus)
         self.encoded_slices = []
         
-        # Ensure directory exists
-        os.makedirs(embeddings_dir, exist_ok=True)
-        
-        # Sanitise model name for filename
-        sanitized_model_name = self.model_name.strip("/").replace("/", "_").replace("\\", "_")
-        cache_filename = f"{dataset_name.replace('/', '-')}_{sanitized_model_name}_embeddings.npy"
-        self.cache_path = os.path.join(embeddings_dir, cache_filename)
-        
-        if os.path.exists(self.cache_path):
-            logger.info(f"Loading cached corpus embeddings from {self.cache_path}...")
-            try:
-                self.entire_corpus_embeddings = np.load(self.cache_path)
-                if len(self.entire_corpus_embeddings) != self.total_corpus_size:
-                    logger.warning(
-                        f"Cached embeddings size ({len(self.entire_corpus_embeddings)}) "
-                        f"does not match corpus size ({self.total_corpus_size}). Discarding cache."
-                    )
+        if embeddings_dir is not None:
+            # Ensure directory exists
+            os.makedirs(embeddings_dir, exist_ok=True)
+            
+            # Sanitise model name for filename
+            sanitized_model_name = self.model_name.strip("/").replace("/", "_").replace("\\", "_")
+            cache_filename = f"{dataset_name.replace('/', '-')}_{sanitized_model_name}_embeddings.npy"
+            self.cache_path = os.path.join(embeddings_dir, cache_filename)
+            
+            if os.path.exists(self.cache_path):
+                logger.info(f"Loading cached corpus embeddings from {self.cache_path}...")
+                try:
+                    self.entire_corpus_embeddings = np.load(self.cache_path)
+                    if len(self.entire_corpus_embeddings) != self.total_corpus_size:
+                        logger.warning(
+                            f"Cached embeddings size ({len(self.entire_corpus_embeddings)}) "
+                            f"does not match corpus size ({self.total_corpus_size}). Discarding cache."
+                        )
+                        self.entire_corpus_embeddings = None
+                except Exception as e:
+                    logger.error(f"Error loading cached embeddings: {e}. Discarding cache.", exc_info=True)
                     self.entire_corpus_embeddings = None
-            except Exception as e:
-                logger.error(f"Error loading cached embeddings: {e}. Discarding cache.", exc_info=True)
+            else:
+                logger.info(f"No cached embeddings found at {self.cache_path}. Will encode and save.")
                 self.entire_corpus_embeddings = None
         else:
-            logger.info(f"No cached embeddings found at {self.cache_path}. Will encode and save.")
+            logger.info(f"No cached embeddings found.")
             self.entire_corpus_embeddings = None
 
     def _encode_texts(self, texts: List[str], batch_size: int = 256) -> np.ndarray:
@@ -334,8 +340,8 @@ def main():
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="./beir_evaluation",
-        help="Directory to save downloaded datasets.",
+        default=None,
+        help="Directory to save downloaded datasets. If None, nothing is written.",
     )
     parser.add_argument(
         "--batch_size",
@@ -357,13 +363,13 @@ def main():
     parser.add_argument(
         "--metric_dir",
         type=str,
-        default="./beir_evaluation/metrics",
-        help="Directory to save metrics.",
+        default=None,
+        help="Directory to save metrics. If None, metrics/predictions are not written.",
     )
     parser.add_argument(
         "--embeddings_dir",
         type=str,
-        default="./beir_evaluation/corpus_embeddings",
+        default=None,
         help="Directory to save/load document embeddings.",
     )
     parser.add_argument(
@@ -420,26 +426,30 @@ def main():
     # Dictionary to keep track of results
     ndcg_scores = {}
 
-    os.makedirs(args.output_dir, exist_ok=True)
-    datasets_dir = os.path.join(args.output_dir, "datasets")
-    os.makedirs(datasets_dir, exist_ok=True)
+    if args.output_dir is not None:
+        os.makedirs(args.output_dir, exist_ok=True)
+        datasets_dir = os.path.join(args.output_dir, "datasets")
+        os.makedirs(datasets_dir, exist_ok=True)
 
-    metric_dir = f"{args.metric_dir}/cross_metrics/test-hipporag-fact" if args.metadata else f"{args.metric_dir}/metrics"
-    os.makedirs(metric_dir, exist_ok=True)
+    metric_dir = None
+    pred_dir = None
+    if args.metric_dir is not None:
+        metric_dir = f"{args.metric_dir}/cross_metrics/test-hipporag-fact" if args.metadata else f"{args.metric_dir}/metrics"
+        os.makedirs(metric_dir, exist_ok=True)
 
-    pred_dir = f"{args.metric_dir}/cross_predictions/test-hipporag-fact" if args.metadata else f"{args.metric_dir}/predictions"
-    os.makedirs(pred_dir, exist_ok=True)
+        pred_dir = f"{args.metric_dir}/cross_predictions/test-hipporag-fact" if args.metadata else f"{args.metric_dir}/predictions"
+        os.makedirs(pred_dir, exist_ok=True)
 
     WIKIPEDIA_BASED_DATASETS = set(["climate-fever", "dbpedia-entity", "fever", "nq"])
                 
     for dataset in datasets_to_run:
         data_dir = f"/data/datasets/beir/{dataset}/XC/"
 
-        if model.model_type == "qwen":
-            from xcai.maggi.utils import DATASETS, get_instruction
-            instruction = "/home/sasokan/suchith/xcai/xcai/models/nvembed/instructions.json"
-            instruction = get_instruction(instruction, DATASETS[dataset])["query"]
-            model.query_prefix = f"Instruct: {instruction} \n Query: "
+        # if model.model_type == "qwen":
+        #     from xcai.maggi.utils import DATASETS, get_instruction
+        #     instruction = "/home/sasokan/suchith/xcai/xcai/models/nvembed/instructions.json"
+        #     instruction = get_instruction(instruction, DATASETS[dataset])["query"]
+        #     model.query_prefix = f"Instruct: {instruction} \n Query: "
 
         logger.info(f"\n{'='*20} Evaluating {dataset} {'='*20}")
         try:
@@ -562,21 +572,22 @@ def main():
             results = retriever.retrieve(corpus, queries)
 
             dataset_prefix = dataset.replace("/", "-")
-                
-            data_ids, data_txt = load_raw_file(f"{data_dir}/raw_data/test.raw.csv")
-            lbl_ids, lbl_txt = load_raw_file(f"{data_dir}/raw_data/label.raw.csv")
-            lbl_ids2idx = {str(i):idx for idx,i in enumerate(lbl_ids)}
-            data, indices, indptr = [], [], [0]
-            for i in data_ids:
-                for l, sc in results[str(i)].items():
-                    if l in lbl_ids2idx:
-                        data.append(sc)
-                        indices.append(lbl_ids2idx[l])
-                    else:
-                        print(f"Invalid label predicted: {l}")
-                indptr.append(len(data))
-            pred_lbl = sp.csr_matrix((data, indices, indptr), dtype=np.float32, shape=(len(data_ids), len(lbl_ids)))
-            sp.save_npz(f"{pred_dir}/test_predictions_{dataset_prefix}.npz", pred_lbl)
+
+            if pred_dir is not None:
+                data_ids, data_txt = load_raw_file(f"{data_dir}/raw_data/test.raw.csv")
+                lbl_ids, lbl_txt = load_raw_file(f"{data_dir}/raw_data/label.raw.csv")
+                lbl_ids2idx = {str(i):idx for idx,i in enumerate(lbl_ids)}
+                data, indices, indptr = [], [], [0]
+                for i in data_ids:
+                    for l, sc in results[str(i)].items():
+                        if l in lbl_ids2idx:
+                            data.append(sc)
+                            indices.append(lbl_ids2idx[l])
+                        else:
+                            print(f"Invalid label predicted: {l}")
+                    indptr.append(len(data))
+                pred_lbl = sp.csr_matrix((data, indices, indptr), dtype=np.float32, shape=(len(data_ids), len(lbl_ids)))
+                sp.save_npz(f"{pred_dir}/test_predictions_{dataset_prefix}.npz", pred_lbl)
 
             # 5. Evaluate and compute metrics
             logger.info("Computing metrics...")
@@ -589,8 +600,9 @@ def main():
             for name, vals in [("NDCG", ndcg), ("Recall", recall), ("Precision", precision), ("MAP", _map), ("MRR", mrr)]:
                 for k, v in vals.items(): metrics.update({f"{name}@{k.split('@')[1]}": v})
 
-            with open(f"{metric_dir}/{dataset_prefix}.json", "w") as file:
-                json.dump({dataset: metrics}, file, indent=4)
+            if metric_dir is not None:
+                with open(f"{metric_dir}/{dataset_prefix}.json", "w") as file:
+                    json.dump({dataset: metrics}, file, indent=4)
             ndcg_scores[dataset_prefix] = metrics["NDCG@10"]
 
         except Exception as e:
@@ -607,7 +619,8 @@ def main():
     else:
         logger.warning("No datasets were successfully evaluated.")
 
-    collate_beir_metrics(metric_dir)
+    if metric_dir is not None:
+        collate_beir_metrics(metric_dir)
 
 
 if __name__ == "__main__":

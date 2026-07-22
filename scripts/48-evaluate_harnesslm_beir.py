@@ -64,10 +64,14 @@ BEIR_DATASETS = [
 ]
 
 BDATASETS = [
-    "fever",
-    "hotpotqa",
+    "msmarco",
     "nfcorpus",
-    "nq",
+    "arguana",
+    "scidocs",
+    "scifact",
+    "fiqa",
+    "hotpotqa",
+    "quora",
 ]
 
 def collate_beir_metrics(metric_dir:str):
