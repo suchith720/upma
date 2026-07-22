@@ -15,7 +15,9 @@ re-runs of the same model/task skip re-encoding the corpus.
 
 import os
 import ast
+import gc
 import json
+import hashlib
 import argparse
 import logging
 from typing import List, Dict
@@ -30,6 +32,16 @@ from mteb.models.abs_encoder import AbsEncoder
 from mteb.models.model_meta import ModelMeta
 from mteb.similarity_functions import cos_sim
 from mteb.types import PromptType
+
+# Silence the benign "leaked semaphore" UserWarning that Python's resource_tracker prints at
+# shutdown when SentenceTransformer's multi-process pool is torn down (workers are hard-
+# terminated, so their queue semaphores are reclaimed only by the tracker's shutdown pass --
+# no real leak survives the process). The tracker runs in a SEPARATE process, so it must be
+# silenced via PYTHONWARNINGS (inherited at that child's startup), not a runtime filter.
+_rt_filter = "ignore::UserWarning:multiprocessing.resource_tracker"
+os.environ["PYTHONWARNINGS"] = (
+    os.environ["PYTHONWARNINGS"] + "," + _rt_filter if os.environ.get("PYTHONWARNINGS") else _rt_filter
+)
 
 # Configure logging
 logging.basicConfig(
@@ -117,6 +129,38 @@ def collate_beir_metrics(metric_dir: str):
         json.dump(beir_metrics, file, indent=4)
 
 
+def _release_pool_queues(pool):
+    """Promptly close a multi-process pool's queues so their semaphores are cleaned up now,
+    avoiding a benign 'leaked semaphore' warning from the resource tracker at shutdown."""
+    if isinstance(pool, dict):
+        for key in ("input", "output"):
+            q = pool.get(key)
+            if q is not None:
+                try:
+                    q.close()
+                    q.join_thread()
+                except Exception:
+                    pass
+
+
+def _resolve_dtype(device, dtype):
+    """Map a --dtype choice to a torch dtype for model loading.
+    'auto' -> bf16 (if supported) / fp16 on CUDA, fp16 on MPS, fp32 (None) elsewhere."""
+    dtype = (dtype or "auto").lower()
+    if dtype == "fp32":
+        return None  # SentenceTransformer default (float32)
+    if dtype == "fp16":
+        return torch.float16
+    if dtype == "bf16":
+        return torch.bfloat16
+    # auto
+    if device == "cuda" and torch.cuda.is_available():
+        return torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+    if device == "mps":
+        return torch.float16
+    return None
+
+
 class DataParallelEncoder(torch.nn.Module):
     def __init__(self, st_model):
         super().__init__()
@@ -146,20 +190,21 @@ class UnifiedMTEBEncoder(AbsEncoder):
         batch_size: int = 256,
         use_data_parallel: bool = False,
         embeddings_dir: str = None,
+        multi_process: bool = False,
+        dtype: str = "auto",
     ):
         st_kwargs = {"trust_remote_code": True, "device": device}
         model_kwargs = {}
         tokenizer_kwargs = {}
         self.model_name = model_name.lower()
         if "qwen" in self.model_name:
-            tokenizer_kwargs["padding_side"] = "left"
-            if "8b" in self.model_name:
-                if device == "cuda" and torch.cuda.is_available() and torch.cuda.is_bf16_supported():
-                    model_kwargs["torch_dtype"] = torch.bfloat16
-                elif device == "cuda" and torch.cuda.is_available():
-                    model_kwargs["torch_dtype"] = torch.float16
-                elif device in ("mps", "cuda"):
-                    model_kwargs["torch_dtype"] = torch.float16
+            tokenizer_kwargs["padding_side"] = "right"
+
+        # Load in reduced precision (default bf16/fp16 on CUDA) for ~2x speed + half memory.
+        torch_dtype = _resolve_dtype(device, dtype)
+        if torch_dtype is not None:
+            model_kwargs["torch_dtype"] = torch_dtype
+        self.dtype_tag = {torch.float16: "fp16", torch.bfloat16: "bf16"}.get(torch_dtype, "fp32")
 
         if model_kwargs:
             st_kwargs["model_kwargs"] = model_kwargs
@@ -173,14 +218,27 @@ class UnifiedMTEBEncoder(AbsEncoder):
         self.batch_size = batch_size
         self.embeddings_dir = embeddings_dir
         self.use_data_parallel = use_data_parallel
+        self.multi_process = multi_process
+        self.pool = None
+        self.parallel_model = None
 
-        if self.use_data_parallel and torch.cuda.device_count() > 1:
-            logger.info(f"Initializing torch.nn.DataParallel across {torch.cuda.device_count()} GPUs...")
-            self.parallel_model = torch.nn.DataParallel(DataParallelEncoder(self.model))
-            self.parallel_model.to(device)
-        else:
+        # Multi-GPU encoding: prefer the ST multi-process pool (one process per GPU,
+        # near-linear speedup). Falls back to (inferior) DataParallel, then single-GPU.
+        if self.multi_process and torch.cuda.is_available() and torch.cuda.device_count() > 1:
             self.use_data_parallel = False
-            self.parallel_model = None
+            target_devices = [f"cuda:{i}" for i in range(torch.cuda.device_count())]
+            logger.info(f"Starting multi-process encode pool on {target_devices}...")
+            self.pool = self.model.start_multi_process_pool(target_devices=target_devices)
+        else:
+            if self.multi_process:
+                logger.warning("--multi_process needs >=2 CUDA GPUs; using single-GPU encode.")
+                self.multi_process = False
+            if self.use_data_parallel and torch.cuda.device_count() > 1:
+                logger.info(f"Initializing torch.nn.DataParallel across {torch.cuda.device_count()} GPUs...")
+                self.parallel_model = torch.nn.DataParallel(DataParallelEncoder(self.model))
+                self.parallel_model.to(device)
+            else:
+                self.use_data_parallel = False
 
         # Auto-detect model type if not explicitly set
         if model_type == "auto":
@@ -244,17 +302,37 @@ class UnifiedMTEBEncoder(AbsEncoder):
         return cos_sim(embeddings1, embeddings2)
 
 
-    def _cache_path(self, task_name, hf_subset, hf_split, prompt_type):
+    def _cache_path(self, task_name, hf_subset, hf_split, prompt_type, texts):
         if self.embeddings_dir is None:
             return None
         sanitized_model = self.model_name.strip("/").replace("/", "_").replace("\\", "_")
         subset = (hf_subset or "default").replace("/", "-")
         split = (hf_split or "test").replace("/", "-")
         ptype = prompt_type.value if isinstance(prompt_type, PromptType) else str(prompt_type)
-        fname = f"{task_name.replace('/', '-')}_{subset}_{split}_{ptype}_{sanitized_model}.npy"
+        # Content hash of THIS chunk's texts. MTEB calls encode() once per corpus CHUNK, so a
+        # key that ignores the chunk contents collides across chunks -- returning the wrong
+        # (first-chunk) embeddings for every same-size chunk. Hashing the texts (+ dtype) makes
+        # each chunk its own cache entry: correct, and still reused across identical re-runs.
+        h = hashlib.md5()
+        h.update(str(len(texts)).encode())
+        for t in texts:
+            h.update(b"\x1f")
+            h.update(t.encode("utf-8", "ignore"))
+        digest = h.hexdigest()[:16]
+        fname = f"{task_name.replace('/', '-')}_{subset}_{split}_{ptype}_{sanitized_model}_{self.dtype_tag}_{digest}.npy"
         return os.path.join(self.embeddings_dir, fname)
 
     def _encode_texts(self, texts: List[str], batch_size: int) -> np.ndarray:
+        if self.multi_process and self.pool is not None:
+            # One process per GPU; ST shards the text list across the pool. Returns numpy.
+            # (encode_multi_process is deprecated in ST v5+; encode() now accepts `pool`.)
+            return self.model.encode(
+                texts,
+                pool=self.pool,
+                batch_size=batch_size,
+                show_progress_bar=True,
+                convert_to_numpy=True,
+            )
         if self.use_data_parallel:
             logger.info("Encoding using PyTorch DataParallel...")
             embeddings = []
@@ -279,6 +357,18 @@ class UnifiedMTEBEncoder(AbsEncoder):
                 convert_to_numpy=True,
             )
 
+    def close(self):
+        """Tear down the multi-process pool, if any (call once at the end)."""
+        if self.pool is not None:
+            logger.info("Stopping multi-process encode pool...")
+            try:
+                self.model.stop_multi_process_pool(self.pool)
+            except Exception as e:
+                logger.warning(f"Error stopping multi-process pool: {e}")
+            _release_pool_queues(self.pool)
+            self.pool = None
+            gc.collect()
+
     def encode(
         self,
         inputs,
@@ -301,11 +391,13 @@ class UnifiedMTEBEncoder(AbsEncoder):
         use_query_prefix = is_query or (not is_query and doc_as_query)
         prefix = self.query_prefix if use_query_prefix else self.doc_prefix
 
-        batch_size = int(kwargs.get("batch_size", self.batch_size) or self.batch_size)
+        # Prefer our configured batch size; MTEB otherwise injects its own default (32),
+        # which would starve the GPUs. `self.batch_size` is set per-dataset in main().
+        batch_size = int(self.batch_size or kwargs.get("batch_size") or 32)
 
         # Cache only document embeddings (queries carry per-task instructions that may vary,
         # and are cheap relative to the corpus) -- mirrors 43-evaluate_beir.py.
-        cache_path = None if is_query else self._cache_path(task_metadata.name, hf_subset, hf_split, prompt_type)
+        cache_path = None if is_query else self._cache_path(task_metadata.name, hf_subset, hf_split, prompt_type, texts)
         if cache_path is not None and os.path.exists(cache_path):
             logger.info(f"Loading cached embeddings from {cache_path}...")
             try:
@@ -366,11 +458,23 @@ def main():
     parser.add_argument(
         "--batch_size",
         type=str,
-        default="256",
+        default="512",
         help="Batch size for encoding. Can be an integer or a dict mapping dataset names to integer sizes.",
     )
     parser.add_argument("--device", type=str, default=None, help="Device (e.g. 'cuda', 'mps', 'cpu'). Auto-detects if None.")
-    parser.add_argument("--use_data_parallel", action="store_true", help="Use torch.nn.DataParallel across GPUs.")
+    parser.add_argument("--use_data_parallel", action="store_true", help="Use torch.nn.DataParallel across GPUs (slower; prefer --multi_process).")
+    parser.add_argument(
+        "--multi_process",
+        action="store_true",
+        help="Encode with a SentenceTransformer multi-process pool (one process per GPU) for near-linear multi-GPU speedup.",
+    )
+    parser.add_argument(
+        "--dtype",
+        type=str,
+        default="auto",
+        choices=["auto", "fp32", "fp16", "bf16"],
+        help="Model load precision. 'auto' = bf16 (if supported) / fp16 on CUDA, else fp32. Lower precision is faster.",
+    )
     parser.add_argument(
         "--metric_dir",
         type=str,
@@ -385,6 +489,9 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Enable TF32 for faster fp32 matmuls on Ampere+ GPUs (free speedup, minimal accuracy impact).
+    torch.set_float32_matmul_precision("high")
 
     # Determine device
     if args.device is None:
@@ -424,6 +531,8 @@ def main():
         batch_size=default_batch_size,
         use_data_parallel=args.use_data_parallel,
         embeddings_dir=embeddings_dir,
+        multi_process=args.multi_process,
+        dtype=args.dtype,
     )
 
     metric_dir = None
@@ -498,6 +607,9 @@ def main():
 
     if metric_dir is not None:
         collate_beir_metrics(metric_dir)
+
+    # Tear down the multi-process encode pool (if one was started).
+    model.close()
 
 
 if __name__ == "__main__":

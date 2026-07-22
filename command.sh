@@ -37,3 +37,8 @@ python scripts/48-evaluate_harnesslm_beir.py --datasets all --query_model_name /
 python scripts/45-beir_fact_prediction.py --datasets all --model_name nomic-ai/nomic-embed-text-v1 --model_type nomic --batch_size 512 --use_data_parallel --metric_dir /data/suchith/outputs/benchmarks/02-nomic_embed_text_v1/ --nomic_data
 
 python scripts/45-beir_fact_prediction.py --datasets all --model_name nomic-ai/nomic-embed-text-v1 --model_type nomic --batch_size 512 --use_data_parallel --metric_dir /data/suchith/outputs/benchmarks/02-nomic_embed_text_v1/ --nomic_data --use_anns --embeddings_dir /data/suchith/outputs/benchmarks/02-nomic_embed_text_v1/corpus_embeddings/
+
+python scripts/56-evaluate_beir_mteb.py --datasets all --model_name Qwen/Qwen3-Embedding-0.6B --model_type qwen --batch_size 512 --use_data_parallel --embeddings_dir /data/suchith/outputs/benchmarks/07-qwen_embedding_0.6B/corpus_embeddings/ --metric_dir /data/suchith/outputs/benchmarks/07-qwen_embedding_0.6B/
+
+python scripts/56-evaluate_beir_mteb.py --datasets all --model_name Qwen/Qwen3-Embedding-0.6B --model_type qwen --batch_size 512 --embeddings_dir /data/suchith/outputs/benchmarks/07-qwen_embedding_0.6B/corpus_embeddings/ --metric_dir /data/suchith/outputs/benchmarks/07-qwen_embedding_0.6B/ --multi_process --dtype bf16
+
