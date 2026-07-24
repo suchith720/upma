@@ -34,7 +34,7 @@ def early_concate_metadata(data_dir:str, output_dir:str, dset_type:str, dset_nam
     meta_file = (
         f"{data_dir}/beir/hotpotqa/XC/raw_data/{meta_name}.raw.csv"
         if "_hotpotqa" in file_suffix else 
-        f"{data_dir}/beir/{dset_name}/XC/raw_data/{meta_name}{file_suffix}.raw.csv"
+        f"{data_dir}/beir/{dset_name}/XC/raw_data/{meta_name}.raw.csv"
     )
     if not os.path.exists(meta_file): 
         print(f"Invalid file: {meta_file}")
@@ -71,10 +71,10 @@ def early_concate_metadata(data_dir:str, output_dir:str, dset_type:str, dset_nam
     os.makedirs(save_dir, exist_ok=True)
 
     if meta_order == "sorted":
-        raw_file = f"{save_dir}/{data_type}_{meta_name}_topk-sorted_{dset_tag}{file_suffix}.raw.txt"
+        raw_file = f"{save_dir}/{data_type}_{meta_name}_topk-sorted_{dset_tag}{file_suffix}.raw.csv"
         exp_file = f"{save_dir}/examples_{meta_name}_topk-sorted_{dset_tag}{file_suffix}.json"
     elif meta_order == "random":
-        raw_file = f"{save_dir}/{data_type}_{meta_name}_topk-random_{dset_tag}{file_suffix}.raw.txt"
+        raw_file = f"{save_dir}/{data_type}_{meta_name}_topk-random_{dset_tag}{file_suffix}.raw.csv"
         exp_file = f"{save_dir}/examples_{meta_name}_topk-random_{dset_tag}{file_suffix}.json"
 
     save_raw_file(raw_file, data_ids, aug_txt)
@@ -117,10 +117,13 @@ if __name__ == "__main__":
     # output_dir = "/data/outputs/reform/alignment/03-Alignment_Qwen3-Embedding-0.6B_pruned_50_pruned_50_no_prompt_to_0.6B_HF/"
 
     data_dir, dset_type = "/data/datasets/", "nomic"
-    output_dir = "/data/suchith/outputs/benchmarks/02-nomic_embed_text_v1/"
+    output_dir = "/data/outputs/benchmarks/02-nomic_embed_text_v1/"
 
     for dset_name in tqdm(DATASETS):
         early_concate_metadata(data_dir, output_dir, dset_type, dset_name, meta_order="sorted", meta_name="hipporag-fact", 
                                data_type="train", file_suffix="nomic_hotpotqa")
+
+        # early_concate_metadata(data_dir, output_dir, dset_type, dset_name, meta_order="sorted", meta_name="hipporag-fact", 
+        #                        data_type="train", file_suffix="nomic")
 
 

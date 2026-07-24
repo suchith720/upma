@@ -490,7 +490,6 @@ def main():
                 data_ids, data_txt = load_raw_file(f"{data_dir}/raw_data/test.raw.csv")
                 data_txt2idx = {txt:idx for idx,txt in enumerate(data_txt)}
 
-
                 dset_tag = dataset.replace("/", "-")
                 if dataset in WIKIPEDIA_BASED_DATASETS:
                     data_meta = sp.load_npz(f"/data/outputs/benchmarks/02-nomic_embed_text_v1/cross_predictions/hipporag-fact/test_predictions_{dset_tag}_hotpotqa.npz")
@@ -499,6 +498,21 @@ def main():
                     data_meta = sp.load_npz(f"/data/outputs/benchmarks/02-nomic_embed_text_v1/cross_predictions/hipporag-fact/test_predictions_{dset_tag}.npz")
                     meta_ids, meta_txt = load_raw_file(f"{data_dir}/raw_data/hipporag-fact.raw.csv")
 
+                # if dataset == "msmarco":
+                #     data_file = f"/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-003/predictions/beir/{dataset}/test_hipporag-fact-xc.npz"
+                #     meta_file = f"{data_dir}/raw_data/hipporag-fact_xc.raw.csv"
+                # elif dataset == "hotpotqa":
+                #     data_file = f"/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-003/predictions/beir/{dataset}/test_hipporag-fact-label-cluster-samples.npz"
+                #     meta_file = f"{data_dir}/raw_data/hipporag-fact_label_cluster_samples.raw.csv"
+                # else:
+                #     data_file = f"/data/outputs/maggi/00_nvembed-to-compute-msmarco-embeddings-003/predictions/beir/{dataset}/test_hipporag-fact.npz"
+                #     meta_file = f"{data_dir}/raw_data/hipporag-fact.raw.csv"
+
+                # data_meta = sp.load_npz(data_file)
+                # meta_ids, meta_txt = load_raw_file(meta_file)
+
+                assert data_meta.shape[1] == len(meta_ids)
+
                 data_meta = retain_topk(data_meta, k=5)
 
                 n_invalid_qry, data_meta_txt = 0, list()
@@ -506,7 +520,7 @@ def main():
                     qry_txt = queries[i]["text"] 
                     if qry_txt in data_txt2idx:
                         idx = data_txt2idx[qry_txt]
-                        qry_txt = qry_txt + " || <FACTS> " + " || ".join([meta_txt[m] for m in data_meta[idx].indices]) 
+                        qry_txt = qry_txt + " <CATEGORIES> " + " || ".join([meta_txt[m] for m in data_meta[idx].indices]) 
                     else:
                         n_invalid_qry += 1
                     data_meta_txt.append(qry_txt)

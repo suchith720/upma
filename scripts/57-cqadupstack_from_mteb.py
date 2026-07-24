@@ -116,7 +116,7 @@ def generate_subset(subset: str, out_root: str):
     corpus, queries, relevant_docs = load_mteb_subset(task_name)
 
     label_ids = [str(x) for x in corpus["id"]]
-    label_txt = list(corpus["text"])  # text only (matches reference label.raw.csv)
+    label_txt = [p + " " + q for p,q in zip(corpus["title"], corpus["text"])]
     query_ids = [str(x) for x in queries["id"]]
     query_txt = list(queries["text"])
 
