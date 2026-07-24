@@ -44,3 +44,6 @@ python scripts/56-evaluate_beir_mteb.py --datasets all --model_name Qwen/Qwen3-E
 
 python scripts/56-evaluate_beir_mteb.py --datasets all --model_name Qwen/Qwen3-Embedding-0.6B --model_type qwen --embeddings_dir /data/suchith/outputs/benchmarks/07-qwen_embedding_0.6B/corpus_embeddings/ --metric_dir /data/suchith/outputs/benchmarks/07-qwen_embedding_0.6B/ --multi_process --dtype bf16 --batch_size 256
 
+python scripts/56-evaluate_beir_mteb.py --datasets all --model_name Qwen/Qwen3-Embedding-4B --model_type qwen --embeddings_dir /data/suchith/outputs/benchmarks/05-qwen_embedding_4B/corpus_embeddings/ --metric_dir /data/suchith/outputs/benchmarks/05-qwen_embedding_4B/ --multi_process --dtype bf16 --batch_size 128
+
+python scripts/56-evaluate_beir_mteb.py --datasets nq hotpotqa fever --model_name Qwen/Qwen3-Embedding-4B --model_type qwen --embeddings_dir /data/suchith/outputs/benchmarks/05-qwen_embedding_4B/corpus_embeddings/ --metric_dir /data/suchith/outputs/benchmarks/05-qwen_embedding_4B/ --multi_process --dtype bf16 --batch_size 128
